@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Video Speed Controller",
+  "name": "Video Speed Controller Pro",
   "version": "1.3.0",
   "description": "Speed up or slow down videos on YouTube, Netflix & any site. Volume boost 400%, screenshots, A-B loop, filters & hotkeys.",
   "icons": {
@@ -19,7 +19,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Video Speed Controller"
+    "default_title": "Video Speed Pro"
   },
   "background": {
     "service_worker": "background/service-worker.js"

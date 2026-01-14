@@ -1,4 +1,4 @@
-// Video Speed Controller - Popup Settings
+// Video Speed Controller Pro - Popup Settings
 
 (function() {
   'use strict';
@@ -35,7 +35,6 @@
   let settings = {};
   let recordingInput = null;
   let currentHostname = null;
-  let currentSitePresetSpeed = null;
 
   // DOM Elements
   const elements = {
@@ -67,12 +66,6 @@
     notification: document.getElementById('notification'),
     speedPresetsBar: document.querySelector('.speed-presets-bar'),
     timeSaved: document.getElementById('time-saved'),
-    presetLabel: document.getElementById('preset-label'),
-    presetSpeed: document.getElementById('preset-speed'),
-    presetAdd: document.getElementById('preset-add'),
-    presetList: document.getElementById('preset-list'),
-    sitePresetValue: document.getElementById('site-preset-value'),
-    sitePresetClear: document.getElementById('site-preset-clear'),
     urlRulePattern: document.getElementById('url-rule-pattern'),
     urlRuleSpeed: document.getElementById('url-rule-speed'),
     urlRuleAdd: document.getElementById('url-rule-add'),
@@ -108,7 +101,7 @@
     infoPlatform: document.getElementById('info-platform'),
     infoUrl: document.getElementById('info-url'),
     btnCopyReport: document.getElementById('btn-copy-report'),
-    btnSendEmail: document.getElementById('btn-send-email')
+    btnOpenGithub: document.getElementById('btn-open-github')
   };
 
   // Initialize popup
@@ -127,7 +120,6 @@
 
   async function loadActiveSite() {
     currentHostname = null;
-    currentSitePresetSpeed = null;
 
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -138,13 +130,6 @@
       if (!['http:', 'https:'].includes(parsed.protocol)) return;
 
       currentHostname = parsed.hostname;
-      const response = await chrome.runtime.sendMessage({
-        type: 'getSitePresetSpeed',
-        hostname: currentHostname
-      });
-      if (typeof response.speed === 'number') {
-        currentSitePresetSpeed = response.speed;
-      }
     } catch (e) {
       // Ignore invalid URLs (chrome://, about:blank, etc.)
     }
@@ -215,15 +200,10 @@
       elements.rememberVolumeBoost.checked = settings.rememberVolumeBoost === true;
     }
 
-    if (!settings.presets) {
-      settings.presets = [];
-    }
 
     renderShortcuts();
     renderBlacklist();
     renderWhitelist();
-    renderPresets();
-    updateSitePresetDisplay();
     updateSiteAccessVisibility();
     renderUrlRules();
     renderIntroOutroRules();
@@ -318,29 +298,6 @@
     `).join('');
   }
 
-  // Render presets
-  function renderPresets() {
-    if (!elements.presetList) return;
-    const presets = settings.presets || [];
-
-    elements.presetList.innerHTML = presets.map((preset, index) => {
-      const isDefault = typeof currentSitePresetSpeed === 'number' &&
-        Math.abs(parseFloat(preset.speed) - currentSitePresetSpeed) < 0.001;
-      return `
-        <div class="preset-item ${isDefault ? 'preset-item-default' : ''}" data-index="${index}">
-          <div class="preset-info">
-            <input type="text" class="preset-name" data-field="label" value="${escapeHtml(preset.label || '')}">
-            <input type="number" class="preset-speed" data-field="speed" value="${preset.speed}" step="0.05" min="0.1" max="16">
-          </div>
-          <div class="preset-actions">
-            <button class="preset-apply" data-action="apply">Apply</button>
-            <button class="preset-set-default" data-action="set-default">Set Default</button>
-            <button class="preset-remove" data-action="remove">&times;</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
 
   function updateSiteAccessVisibility() {
     if (!elements.siteAccessMode) return;
@@ -353,35 +310,6 @@
     }
   }
 
-  function updateSitePresetDisplay() {
-    if (!elements.sitePresetValue) return;
-
-    if (!currentHostname) {
-      elements.sitePresetValue.textContent = 'Unavailable';
-      if (elements.sitePresetClear) {
-        elements.sitePresetClear.disabled = true;
-      }
-      return;
-    }
-
-    if (typeof currentSitePresetSpeed !== 'number') {
-      elements.sitePresetValue.textContent = 'None';
-      if (elements.sitePresetClear) {
-        elements.sitePresetClear.disabled = false;
-      }
-      return;
-    }
-
-    const match = (settings.presets || []).find(
-      preset => Math.abs(parseFloat(preset.speed) - currentSitePresetSpeed) < 0.001
-    );
-    elements.sitePresetValue.textContent = match
-      ? `${match.label} (${currentSitePresetSpeed}x)`
-      : `${currentSitePresetSpeed}x`;
-    if (elements.sitePresetClear) {
-      elements.sitePresetClear.disabled = false;
-    }
-  }
 
   // Render URL rules
   function renderUrlRules() {
@@ -523,20 +451,6 @@
       elements.whitelistList.addEventListener('click', handleWhitelistClick);
     }
 
-    // Presets
-    if (elements.presetAdd && elements.presetLabel && elements.presetSpeed) {
-      elements.presetAdd.addEventListener('click', addPreset);
-      elements.presetLabel.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addPreset();
-      });
-    }
-    if (elements.presetList) {
-      elements.presetList.addEventListener('click', handlePresetClick);
-      elements.presetList.addEventListener('change', handlePresetChange);
-    }
-    if (elements.sitePresetClear) {
-      elements.sitePresetClear.addEventListener('click', () => setSitePreset(null));
-    }
 
     // URL Rules
     elements.urlRuleAdd.addEventListener('click', addUrlRule);
@@ -624,8 +538,8 @@
     if (elements.btnCopyReport) {
       elements.btnCopyReport.addEventListener('click', copyReportToClipboard);
     }
-    if (elements.btnSendEmail) {
-      elements.btnSendEmail.addEventListener('click', sendReportViaEmail);
+    if (elements.btnOpenGithub) {
+      elements.btnOpenGithub.addEventListener('click', openGitHubIssue);
     }
     if (elements.includeUrl) {
       elements.includeUrl.addEventListener('change', () => {
@@ -872,111 +786,6 @@
     saveSettings();
   }
 
-  // Add preset
-  function addPreset() {
-    const label = elements.presetLabel.value.trim();
-    const speed = parseFloat(elements.presetSpeed.value);
-
-    if (!label) {
-      showNotification('Please enter a preset name', 'error');
-      return;
-    }
-
-    if (isNaN(speed) || speed < 0.1 || speed > 16) {
-      showNotification('Speed must be between 0.1 and 16', 'error');
-      return;
-    }
-
-    settings.presets = settings.presets || [];
-    settings.presets.push({
-      id: `preset_${Date.now().toString(36)}`,
-      label,
-      speed: normalizeSpeed(speed)
-    });
-
-    elements.presetLabel.value = '';
-    renderPresets();
-    saveSettings();
-    showNotification('Preset added', 'success');
-  }
-
-  function handlePresetClick(e) {
-    const item = e.target.closest('.preset-item');
-    if (!item) return;
-    const index = parseInt(item.dataset.index);
-    const preset = settings.presets?.[index];
-    if (!preset) return;
-
-    const action = e.target.dataset.action;
-    if (action === 'apply') {
-      applyPresetSpeed(preset.speed);
-    } else if (action === 'set-default') {
-      setSitePreset(preset.speed);
-    } else if (action === 'remove') {
-      settings.presets.splice(index, 1);
-      renderPresets();
-      updateSitePresetDisplay();
-      saveSettings();
-    }
-  }
-
-  function handlePresetChange(e) {
-    const item = e.target.closest('.preset-item');
-    if (!item) return;
-    const index = parseInt(item.dataset.index);
-    const field = e.target.dataset.field;
-    if (!field || !settings.presets?.[index]) return;
-
-    if (field === 'label') {
-      settings.presets[index].label = e.target.value.trim();
-    } else if (field === 'speed') {
-      const speed = parseFloat(e.target.value);
-      if (isNaN(speed) || speed < 0.1 || speed > 16) {
-        showNotification('Speed must be between 0.1 and 16', 'error');
-        return;
-      }
-      settings.presets[index].speed = normalizeSpeed(speed);
-    }
-
-    renderPresets();
-    updateSitePresetDisplay();
-    saveSettings();
-  }
-
-  async function setSitePreset(speed) {
-    if (!currentHostname) {
-      showNotification('This page does not support site presets', 'error');
-      return;
-    }
-
-    await chrome.runtime.sendMessage({
-      type: 'setSitePresetSpeed',
-      hostname: currentHostname,
-      speed
-    });
-
-    currentSitePresetSpeed = typeof speed === 'number' ? speed : null;
-    updateSitePresetDisplay();
-    renderPresets();
-
-    if (typeof speed === 'number') {
-      applyPresetSpeed(speed);
-      showNotification('Default preset saved for this site', 'success');
-    } else {
-      showNotification('Site default cleared', 'success');
-    }
-  }
-
-  async function applyPresetSpeed(speed) {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { type: 'setSpeed', speed });
-    }
-  }
-
-  function normalizeSpeed(speed) {
-    return Math.round(speed * 100) / 100;
-  }
 
   // Add URL rule
   function addUrlRule() {
@@ -1127,6 +936,12 @@
     elements.infoUrl.textContent = currentPageUrl;
     elements.infoUrl.style.display = elements.includeUrl.checked ? 'block' : 'none';
 
+    // Show/hide GitHub button based on repo configuration
+    const githubRepo = getGitHubRepoUrl();
+    if (elements.btnOpenGithub) {
+      elements.btnOpenGithub.style.display = githubRepo ? 'flex' : 'none';
+    }
+
     // Clear previous description
     elements.feedbackDescription.value = '';
 
@@ -1181,7 +996,7 @@
     const description = elements.feedbackDescription.value.trim();
     const includeUrl = elements.includeUrl.checked;
 
-    let report = `=== Video Speed Controller - Bug Report ===\n\n`;
+    let report = `=== Video Speed Controller Pro - Bug Report ===\n\n`;
     report += `DESCRIPTION:\n${description || '(No description provided)'}\n\n`;
     report += `SYSTEM INFORMATION:\n`;
     report += `- Extension Version: v${manifest.version}\n`;
@@ -1220,8 +1035,8 @@
     }
   }
 
-  // Send report via email
-  function sendReportViaEmail() {
+  // Open GitHub issue
+  function openGitHubIssue() {
     const manifest = chrome.runtime.getManifest();
     const description = elements.feedbackDescription.value.trim();
     
@@ -1232,16 +1047,38 @@
     }
 
     const report = generateReport();
-    const subject = encodeURIComponent(`[Bug Report] Video Speed Controller v${manifest.version}`);
-    const body = encodeURIComponent(report);
+    const browserInfo = getBrowserInfo();
     
-    // Open default email client
-    // Users can change the email address to their own support email
-    const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+    // GitHub issue template
+    const title = encodeURIComponent(`[Bug Report] Issue in v${manifest.version}`);
+    const body = encodeURIComponent(
+      `## Description\n${description || '(No description provided)'}\n\n` +
+      `## System Information\n` +
+      `- Extension Version: v${manifest.version}\n` +
+      `- Browser: ${browserInfo.browser}\n` +
+      `- Platform: ${browserInfo.platform}\n` +
+      (elements.includeUrl.checked && currentPageUrl ? `- Page URL: ${currentPageUrl}\n` : '') +
+      `\n## Full Report\n\`\`\`\n${report}\n\`\`\``
+    );
     
-    window.open(mailtoLink, '_blank');
-    showNotification('Opening email client...', 'success');
-    closeFeedbackModal();
+    const githubRepo = getGitHubRepoUrl();
+    
+    if (githubRepo) {
+      const issueUrl = `${githubRepo}/issues/new?title=${title}&body=${body}`;
+      window.open(issueUrl, '_blank');
+      showNotification('Opening GitHub issue...', 'success');
+      closeFeedbackModal();
+    } else {
+      showNotification('GitHub repository not configured', 'error');
+    }
+  }
+
+  function getGitHubRepoUrl() {
+    const manifest = chrome.runtime.getManifest();
+    if (manifest.homepage_url) {
+      return manifest.homepage_url.replace(/\/$/, '');
+    }
+    return null;
   }
 
   // Initialize on DOM ready

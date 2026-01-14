@@ -1,4 +1,4 @@
-// Video Speed Controller - Content Script
+// Video Speed Controller Pro - Content Script
 
 (function() {
   'use strict';
@@ -70,7 +70,7 @@
     if (contextInvalidated) return;
     contextInvalidated = true;
 
-    console.log('Video Speed Controller: Extension context invalidated, cleaning up');
+    console.log('Video Speed Pro: Extension context invalidated, cleaning up');
 
     // Stop time tracking
     if (timeTrackingInterval) {
@@ -103,7 +103,7 @@
   async function init() {
     // Check if extension context is valid
     if (!isContextValid()) {
-      console.log('Video Speed Controller: Extension context not available');
+      console.log('Video Speed Pro: Extension context not available');
       return;
     }
 
@@ -111,7 +111,7 @@
     const blockCheck = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
     if (blockCheck.blocked) {
       isBlocked = true;
-      console.log('Video Speed Controller: Disabled on this site');
+      console.log('Video Speed Pro: Disabled on this site');
       return;
     }
 
@@ -165,7 +165,7 @@
       }
     }
 
-    console.log('Video Speed Controller: Initialized');
+    console.log('Video Speed Pro: Initialized');
   }
 
   // Send message to background script
@@ -357,7 +357,7 @@
       updateVolumeBoostDisplay(media);
     }
 
-    console.log('Video Speed Controller: Attached to', media.tagName);
+    console.log('Video Speed Pro: Attached to', media.tagName);
   }
 
   // Detach controller from media element
@@ -803,7 +803,7 @@
     // Skip to the specified time
     media.currentTime = skipTo;
     showSkipFeedback(media, 'Intro Skipped', skipTo);
-    console.log(`Video Speed Controller: Skipped intro to ${skipTo}s`);
+    console.log(`Video Speed Pro: Skipped intro to ${skipTo}s`);
   }
 
   // Skip to outro (end of video minus outro time)
@@ -820,7 +820,7 @@
     // Skip to near the end
     media.currentTime = skipTo;
     showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
-    console.log(`Video Speed Controller: Skipped outro to ${skipTo.toFixed(1)}s`);
+    console.log(`Video Speed Pro: Skipped outro to ${skipTo.toFixed(1)}s`);
   }
 
   // Check if we should trigger outro skip (for auto-skip)
@@ -839,7 +839,7 @@
       // Option 1: Skip to end (lets browser handle what happens next)
       media.currentTime = media.duration - 0.5;
       showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
-      console.log(`Video Speed Controller: Auto-skipped outro at ${introOutroSettings.outroSkip}s remaining`);
+      console.log(`Video Speed Pro: Auto-skipped outro at ${introOutroSettings.outroSkip}s remaining`);
     }
   }
 
@@ -921,7 +921,7 @@
       hostname: window.location.hostname
     });
     
-    console.log('Video Speed Controller: Intro/Outro settings reloaded', introOutroSettings);
+    console.log('Video Speed Pro: Intro/Outro settings reloaded', introOutroSettings);
   }
 
   // ==========================================
@@ -973,10 +973,10 @@
         URL.revokeObjectURL(url);
 
         showFeedback(media, 'Screenshot', 'Saved!');
-        console.log('Video Speed Controller: Screenshot captured', filename);
+        console.log('Video Speed Pro: Screenshot captured', filename);
       }, 'image/png', 1.0);
     } catch (e) {
-      console.error('Video Speed Controller: Screenshot failed', e);
+      console.error('Video Speed Pro: Screenshot failed', e);
       showFeedback(media, 'Screenshot', 'Error');
     }
   }
@@ -995,7 +995,7 @@
 
     showFeedback(media, 'Loop A', formatTime(state.pointA));
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Controller: Set loop point A at', state.pointA);
+    console.log('Video Speed Pro: Set loop point A at', state.pointA);
 
     // If both points are set, activate the loop
     if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
@@ -1014,7 +1014,7 @@
 
     showFeedback(media, 'Loop B', formatTime(state.pointB));
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Controller: Set loop point B at', state.pointB);
+    console.log('Video Speed Pro: Set loop point B at', state.pointB);
 
     // If both points are set and A < B, activate the loop
     if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
@@ -1062,7 +1062,7 @@
     abLoopState.delete(media);
     showFeedback(media, 'A-B Loop', 'Cleared');
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Controller: A-B loop cleared');
+    console.log('Video Speed Pro: A-B loop cleared');
   }
 
   // Toggle A-B loop on/off (without clearing points)
@@ -1244,7 +1244,7 @@
 
       return nodes;
     } catch (e) {
-      console.error('Video Speed Controller: Volume boost init failed', e);
+      console.error('Video Speed Pro: Volume boost init failed', e);
       return null;
     }
   }
@@ -1563,7 +1563,7 @@
       setTimeout(() => {
         media.playbackRate = urlRuleResponse.speed;
         updateControllerDisplay(media);
-        console.log(`Video Speed Controller: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
+        console.log(`Video Speed Pro: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
       }, 100);
       return;
     }
@@ -1828,13 +1828,13 @@
       if (settings.showPipIndicator !== false) {
         createPipIndicator(media);
       }
-      console.log('Video Speed Controller: Entered Picture-in-Picture mode');
+      console.log('Video Speed Pro: Entered Picture-in-Picture mode');
     });
 
     media.addEventListener('leavepictureinpicture', () => {
       pipMediaElement = null;
       removePipIndicator();
-      console.log('Video Speed Controller: Left Picture-in-Picture mode');
+      console.log('Video Speed Pro: Left Picture-in-Picture mode');
     });
   }
 
@@ -1977,7 +1977,7 @@
     if (currentUrl === lastUrl) return;
 
     lastUrl = currentUrl;
-    console.log('Video Speed Controller: URL changed, checking rules');
+    console.log('Video Speed Pro: URL changed, checking rules');
 
     // Reload intro/outro settings for new URL
     introOutroSettings = await sendMessage({
@@ -2000,7 +2000,7 @@
     if ('navigation' in window) {
       try {
         window.navigation.addEventListener('navigatesuccess', handleUrlChange);
-        console.log('Video Speed Controller: Using Navigation API for URL detection');
+        console.log('Video Speed Pro: Using Navigation API for URL detection');
       } catch (e) {
         // Navigation API not fully supported, fall back to polling
         startPollingUrlDetection();
@@ -2016,7 +2016,7 @@
 
   // Fallback: Poll for URL changes (for browsers without Navigation API)
   function startPollingUrlDetection() {
-    console.log('Video Speed Controller: Using polling for URL detection');
+    console.log('Video Speed Pro: Using polling for URL detection');
     
     const urlCheckInterval = setInterval(() => {
       // Skip if context is invalidated

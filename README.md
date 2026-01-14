@@ -1,4 +1,4 @@
-# Video Speed Controller
+# Video Speed Controller Pro
 
 A powerful browser extension to control video and audio playback speed with customizable keyboard shortcuts, screenshot capture, A-B loop, video filters, volume boost, intro/outro skip, and an elegant dark UI.
 
@@ -198,7 +198,7 @@ Configure all settings through an elegant dark-themed popup interface.
 ## 🏗️ Project Structure
 
 ```
-Video Speed Controller/
+Video Speed Controller Pro/
 ├── manifest.json           # Extension manifest (V3)
 ├── browser-polyfill.min.js # Cross-browser compatibility
 ├── background/

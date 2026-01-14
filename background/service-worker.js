@@ -1,4 +1,4 @@
-// Service Worker for Video Speed Controller Extension
+// Service Worker for Video Speed Controller Pro Extension
 
 // Batched storage writes for better performance
 let pendingWrites = {};
@@ -117,7 +117,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     await chrome.storage.sync.set(DEFAULT_SETTINGS);
     await chrome.storage.local.set({ timeSaved: 0 });
     timeSavedCache = 0;
-    console.log('Video Speed Controller: Default settings initialized');
+    console.log('Video Speed Pro: Default settings initialized');
   } else if (details.reason === 'update') {
     // Merge new default settings with existing ones
     const existing = await chrome.storage.sync.get(null);
@@ -133,7 +133,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       await chrome.storage.local.set({ timeSaved: 0 });
       timeSavedCache = 0;
     }
-    console.log('Video Speed Controller: Settings migrated');
+    console.log('Video Speed Pro: Settings migrated');
   }
 });
 
