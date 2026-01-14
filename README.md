@@ -1,7 +1,8 @@
 # Video Speed Controller
 
-A browser extension to control video and audio playback speed with customizable keyboard shortcuts and an elegant dark UI.
+A powerful browser extension to control video and audio playback speed with customizable keyboard shortcuts, screenshot capture, A-B loop, video filters, volume boost, intro/outro skip, and an elegant dark UI.
 
+![Version](https://img.shields.io/badge/Version-1.3.0-purple)
 ![Chrome](https://img.shields.io/badge/Chrome-Supported-green?logo=googlechrome)
 ![Firefox](https://img.shields.io/badge/Firefox-Supported-orange?logo=firefox)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
@@ -261,6 +262,9 @@ Video Speed Controller/
 - Blacklist/whitelist settings
 - UI preferences (colors, opacity, controller mode)
 - Time saved statistics
+- Video filter settings per website (brightness, contrast, saturation)
+- Volume boost levels per website
+- Intro/outro skip settings and per-site rules
 
 **Your data never leaves your browser. Period.**
 
@@ -276,6 +280,18 @@ Contributions are welcome! Feel free to:
 - Submit pull requests
 
 ## 📝 Changelog
+
+### v1.3.0
+- **A-B Loop** — Loop any section of a video with Set A, Set B, and Clear controls
+- **Screenshot Capture** — Save current video frame as PNG with `P` key
+- **Video Filters** — Adjust brightness, contrast, and saturation with sliders
+- **Volume Boost** — Amplify audio up to 400% using Web Audio API
+- **Intro/Outro Skip** — Auto-skip intros and outros with per-site rules
+- **Remember Filters** — Option to save video filter settings per website
+- **Remember Volume Boost** — Option to save volume boost level per website
+- **New keyboard shortcuts** — `[` and `]` for A-B loop, `P` for screenshot, `I` and `O` for intro/outro skip
+- Expanded full controller panel with new sections
+- Improved site access with whitelist mode option
 
 ### v1.2.0
 - Added frame-by-frame navigation (`,` and `.` keys)

@@ -1,5 +1,34 @@
 // Service Worker for Video Speed Controller Extension
 
+// Batched storage writes for better performance
+let pendingWrites = {};
+let writeTimer = null;
+const WRITE_BATCH_DELAY = 300; // ms
+
+function batchedStorageSet(updates) {
+  Object.assign(pendingWrites, updates);
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(async () => {
+    if (Object.keys(pendingWrites).length > 0) {
+      await chrome.storage.sync.set(pendingWrites);
+      pendingWrites = {};
+    }
+  }, WRITE_BATCH_DELAY);
+}
+
+// Immediate write for critical settings (bypass batching)
+async function immediateStorageSet(updates) {
+  // Flush any pending writes first
+  if (Object.keys(pendingWrites).length > 0) {
+    clearTimeout(writeTimer);
+    Object.assign(pendingWrites, updates);
+    await chrome.storage.sync.set(pendingWrites);
+    pendingWrites = {};
+  } else {
+    await chrome.storage.sync.set(updates);
+  }
+}
+
 const DEFAULT_SETTINGS = {
   enabled: true,
   hideByDefault: false,
@@ -112,7 +141,8 @@ async function handleMessage(message, sender) {
       const current = await chrome.storage.sync.get(['savedSpeeds']);
       const savedSpeeds = current.savedSpeeds || {};
       savedSpeeds[message.hostname] = message.speed;
-      await chrome.storage.sync.set({ savedSpeeds });
+      // Use batched write for frequent speed saves
+      batchedStorageSet({ savedSpeeds });
       return { success: true };
 
     case 'setSitePresetSpeed': {
@@ -166,7 +196,8 @@ async function handleMessage(message, sender) {
     case 'addTimeSaved':
       const timeData = await chrome.storage.sync.get(['timeSaved']);
       const newTimeSaved = (timeData.timeSaved || 0) + message.seconds;
-      await chrome.storage.sync.set({ timeSaved: newTimeSaved });
+      // Use batched write for frequent time tracking updates
+      batchedStorageSet({ timeSaved: newTimeSaved });
       return { success: true, timeSaved: newTimeSaved };
 
     case 'updateSyncTime':
@@ -252,7 +283,8 @@ async function handleMessage(message, sender) {
       const filterData = await chrome.storage.sync.get(['savedFilters']);
       const savedFilters = filterData.savedFilters || {};
       savedFilters[message.hostname] = message.filters;
-      await chrome.storage.sync.set({ savedFilters });
+      // Use batched write for frequent filter adjustments
+      batchedStorageSet({ savedFilters });
       return { success: true };
     }
 
@@ -269,7 +301,8 @@ async function handleMessage(message, sender) {
       const volumeData = await chrome.storage.sync.get(['savedVolumeBoost']);
       const savedVolumeBoost = volumeData.savedVolumeBoost || {};
       savedVolumeBoost[message.hostname] = message.level;
-      await chrome.storage.sync.set({ savedVolumeBoost });
+      // Use batched write for frequent volume adjustments
+      batchedStorageSet({ savedVolumeBoost });
       return { success: true };
     }
 
