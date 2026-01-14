@@ -272,6 +272,22 @@ Video Speed Controller Pro/
 
 MIT License — feel free to use, modify, and distribute.
 
+## 🔒 Privacy Policy
+
+This extension is 100% privacy-focused. We do NOT collect, store, or transmit any of your data to external servers.
+
+**📋 [View Full Privacy Policy](PRIVACY_POLICY.md)**
+
+All data is stored locally on your device. No tracking, no analytics, no data collection.
+
+## 💬 Support
+
+Need help or have questions?
+
+- **🐛 Report Issues:** Open an issue on [GitHub](https://github.com/yourusername/video-speed-controller-pro) (replace with your repo URL)
+- **💡 Feature Requests:** Submit via GitHub Issues
+- **📧 Contact:** [Your Support Email] (replace with your email)
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to:
