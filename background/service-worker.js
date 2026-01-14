@@ -164,7 +164,7 @@ async function handleMessage(message, sender) {
     }
 
     case 'saveSettings': {
-      const { timeSaved, ...syncSettings } = message.settings || {};
+      const { timeSaved: _timeSaved, ...syncSettings } = message.settings || {};
       await chrome.storage.sync.set(syncSettings);
       // Notify all tabs about settings update
       const tabs = await chrome.tabs.query({});
