@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   opacity: 0.8,
   autoHideDelay: 0,
   controllerMode: 'minimal',
+  showPipIndicator: true,
   shortcuts: [
     { action: 'show-controller', key: 'V', modifiers: [], enabled: true },
     { action: 'decrease-speed', key: 'S', modifiers: [], value: 0.1, enabled: true },
@@ -16,11 +17,15 @@ const DEFAULT_SETTINGS = {
     { action: 'rewind', key: 'Z', modifiers: [], value: 10, enabled: true },
     { action: 'advance', key: 'X', modifiers: [], value: 10, enabled: true },
     { action: 'reset-speed', key: 'R', modifiers: [], value: 1.0, enabled: true },
-    { action: 'preferred-speed', key: 'G', modifiers: [], value: 3.0, enabled: true }
+    { action: 'preferred-speed', key: 'G', modifiers: [], value: 3.0, enabled: true },
+    { action: 'frame-forward', key: '.', modifiers: [], enabled: true },
+    { action: 'frame-backward', key: ',', modifiers: [], enabled: true }
   ],
   blacklist: [],
   savedSpeeds: {},
-  timeSaved: 0
+  timeSaved: 0,
+  urlRules: [],
+  lastSyncTime: null
 };
 
 // Initialize default settings on install
@@ -112,6 +117,37 @@ async function handleMessage(message, sender) {
       const newTimeSaved = (timeData.timeSaved || 0) + message.seconds;
       await chrome.storage.sync.set({ timeSaved: newTimeSaved });
       return { success: true, timeSaved: newTimeSaved };
+
+    case 'updateSyncTime':
+      const syncTime = Date.now();
+      await chrome.storage.sync.set({ lastSyncTime: syncTime });
+      return { success: true, lastSyncTime: syncTime };
+
+    case 'getSyncStatus':
+      const syncData = await chrome.storage.sync.get(['lastSyncTime']);
+      return { lastSyncTime: syncData.lastSyncTime || null };
+
+    case 'getUrlRuleSpeed':
+      const ruleSettings = await chrome.storage.sync.get(['urlRules']);
+      const urlRules = ruleSettings.urlRules || [];
+      const url = message.url;
+
+      // Find matching rule (first match wins)
+      for (const rule of urlRules) {
+        try {
+          // Try as regex first
+          const regex = new RegExp(rule.pattern, 'i');
+          if (regex.test(url)) {
+            return { speed: rule.speed, matched: true, pattern: rule.pattern };
+          }
+        } catch {
+          // Fall back to simple string match
+          if (url.includes(rule.pattern)) {
+            return { speed: rule.speed, matched: true, pattern: rule.pattern };
+          }
+        }
+      }
+      return { speed: null, matched: false };
 
     default:
       return { error: 'Unknown message type' };

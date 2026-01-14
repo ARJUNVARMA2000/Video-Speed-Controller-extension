@@ -11,7 +11,9 @@
     'rewind': 'Rewind',
     'advance': 'Advance',
     'reset-speed': 'Reset Speed',
-    'preferred-speed': 'Preferred Speed'
+    'preferred-speed': 'Preferred Speed',
+    'frame-forward': 'Next Frame',
+    'frame-backward': 'Previous Frame'
   };
 
   // Value units for display
@@ -50,7 +52,16 @@
     importInput: document.getElementById('import-input'),
     notification: document.getElementById('notification'),
     speedPresetsBar: document.querySelector('.speed-presets-bar'),
-    timeSaved: document.getElementById('time-saved')
+    timeSaved: document.getElementById('time-saved'),
+    urlRulePattern: document.getElementById('url-rule-pattern'),
+    urlRuleSpeed: document.getElementById('url-rule-speed'),
+    urlRuleAdd: document.getElementById('url-rule-add'),
+    urlRulesList: document.getElementById('url-rules-list'),
+    colorBackground: document.getElementById('colorBackground'),
+    colorAccent: document.getElementById('colorAccent'),
+    showPipIndicator: document.getElementById('showPipIndicator'),
+    syncStatus: document.getElementById('sync-status'),
+    syncTime: document.getElementById('sync-time')
   };
 
   // Initialize popup
@@ -81,11 +92,50 @@
     elements.autoHideDelay.value = autoHide;
     elements.autoHideDelayValue.textContent = autoHide === 0 ? 'Off' : autoHide + 's';
 
+    // Color pickers
+    elements.colorBackground.value = settings.colorBackground || '#1a1a2e';
+    elements.colorAccent.value = settings.colorAccent || '#e94560';
+
+    // PiP indicator setting
+    if (elements.showPipIndicator) {
+      elements.showPipIndicator.checked = settings.showPipIndicator !== false;
+    }
+
     // Time saved display
     updateTimeSavedDisplay();
 
+    // Sync status
+    updateSyncStatus();
+
     renderShortcuts();
     renderBlacklist();
+    renderUrlRules();
+  }
+
+  // Update sync status display
+  async function updateSyncStatus() {
+    if (!elements.syncStatus || !elements.syncTime) return;
+
+    const response = await chrome.runtime.sendMessage({ type: 'getSyncStatus' });
+    
+    if (response.lastSyncTime) {
+      const date = new Date(response.lastSyncTime);
+      const timeAgo = getTimeAgo(date);
+      elements.syncTime.textContent = timeAgo;
+      elements.syncStatus.classList.add('synced');
+    } else {
+      elements.syncTime.textContent = 'Not synced';
+    }
+  }
+
+  // Get human-readable time ago string
+  function getTimeAgo(date) {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return date.toLocaleDateString();
   }
 
   // Format and display time saved
@@ -139,6 +189,20 @@
     `).join('');
   }
 
+  // Render URL rules
+  function renderUrlRules() {
+    const urlRules = settings.urlRules || [];
+    elements.urlRulesList.innerHTML = urlRules.map((rule, index) => `
+      <div class="url-rule-item" data-index="${index}">
+        <div class="url-rule-info">
+          <span class="url-rule-item-pattern">${escapeHtml(rule.pattern)}</span>
+          <span class="url-rule-item-speed">${rule.speed}x</span>
+        </div>
+        <button class="url-rule-remove" data-index="${index}">&times;</button>
+      </div>
+    `).join('');
+  }
+
   // Setup event listeners
   function setupEventListeners() {
     // Main toggle
@@ -154,6 +218,14 @@
         saveSettings();
       });
     });
+
+    // PiP indicator toggle
+    if (elements.showPipIndicator) {
+      elements.showPipIndicator.addEventListener('change', () => {
+        settings.showPipIndicator = elements.showPipIndicator.checked;
+        saveSettings();
+      });
+    }
 
     // Opacity slider
     elements.opacity.addEventListener('input', () => {
@@ -174,6 +246,17 @@
       const value = parseInt(elements.autoHideDelay.value);
       elements.autoHideDelayValue.textContent = value === 0 ? 'Off' : value + 's';
       settings.autoHideDelay = value;
+      saveSettings();
+    });
+
+    // Color pickers
+    elements.colorBackground.addEventListener('input', () => {
+      settings.colorBackground = elements.colorBackground.value;
+      saveSettings();
+    });
+
+    elements.colorAccent.addEventListener('input', () => {
+      settings.colorAccent = elements.colorAccent.value;
       saveSettings();
     });
 
@@ -207,6 +290,13 @@
       if (e.key === 'Enter') addBlacklistItem();
     });
     elements.blacklistList.addEventListener('click', handleBlacklistClick);
+
+    // URL Rules
+    elements.urlRuleAdd.addEventListener('click', addUrlRule);
+    elements.urlRulePattern.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addUrlRule();
+    });
+    elements.urlRulesList.addEventListener('click', handleUrlRuleClick);
 
     // Footer buttons
     elements.btnExport.addEventListener('click', exportSettings);
@@ -331,6 +421,48 @@
     saveSettings();
   }
 
+  // Add URL rule
+  function addUrlRule() {
+    const pattern = elements.urlRulePattern.value.trim();
+    const speed = parseFloat(elements.urlRuleSpeed.value);
+
+    if (!pattern) {
+      showNotification('Please enter a URL pattern', 'error');
+      return;
+    }
+
+    if (isNaN(speed) || speed < 0.1 || speed > 16) {
+      showNotification('Speed must be between 0.1 and 16', 'error');
+      return;
+    }
+
+    // Check for duplicates
+    settings.urlRules = settings.urlRules || [];
+    const exists = settings.urlRules.some(r => r.pattern === pattern);
+    if (exists) {
+      showNotification('Rule for this pattern already exists', 'error');
+      return;
+    }
+
+    settings.urlRules.push({ pattern, speed });
+    elements.urlRulePattern.value = '';
+    elements.urlRuleSpeed.value = '1';
+    renderUrlRules();
+    saveSettings();
+    showNotification('URL rule added', 'success');
+  }
+
+  // Handle URL rule click (remove)
+  function handleUrlRuleClick(e) {
+    const removeBtn = e.target.closest('.url-rule-remove');
+    if (!removeBtn) return;
+
+    const index = parseInt(removeBtn.dataset.index);
+    settings.urlRules.splice(index, 1);
+    renderUrlRules();
+    saveSettings();
+  }
+
   // Export settings
   async function exportSettings() {
     const data = await chrome.runtime.sendMessage({ type: 'exportSettings' });
@@ -385,6 +517,9 @@
   // Save settings to storage
   async function saveSettings() {
     await chrome.runtime.sendMessage({ type: 'saveSettings', settings });
+    // Update sync time
+    await chrome.runtime.sendMessage({ type: 'updateSyncTime' });
+    updateSyncStatus();
   }
 
   // Show notification

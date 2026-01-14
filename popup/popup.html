@@ -110,6 +110,22 @@
           <span class="range-value" id="autoHideDelay-value">Off</span>
         </div>
       </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Badge Colors</span>
+          <span class="setting-desc">Customize overlay colors</span>
+        </div>
+        <div class="color-pickers">
+          <div class="color-picker-item">
+            <label for="colorBackground">BG</label>
+            <input type="color" id="colorBackground" value="#1a1a2e">
+          </div>
+          <div class="color-picker-item">
+            <label for="colorAccent">Text</label>
+            <input type="color" id="colorAccent" value="#e94560">
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -153,6 +169,38 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">PiP Speed Indicator</span>
+          <span class="setting-desc">Show floating controller in PiP mode</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="showPipIndicator" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- URL Rules Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+      URL Speed Rules
+    </h2>
+    <p class="section-desc">Set default speeds for specific URL patterns (e.g., "/shorts" = 1x)</p>
+    <div class="url-rules-container">
+      <div class="url-rule-input-row">
+        <input type="text" class="url-rule-pattern" id="url-rule-pattern" placeholder="URL pattern (e.g., /shorts)">
+        <input type="number" class="url-rule-speed" id="url-rule-speed" placeholder="Speed" min="0.1" max="16" step="0.1" value="1">
+        <button class="url-rule-add" id="url-rule-add">Add</button>
+      </div>
+      <div class="url-rules-list" id="url-rules-list">
+        <!-- URL rules rendered by JS -->
+      </div>
     </div>
   </section>
 
@@ -172,6 +220,20 @@
       </div>
       <div class="blacklist-list" id="blacklist-list">
         <!-- Blacklist items rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Sync Status -->
+  <section class="section sync-section">
+    <div class="sync-status" id="sync-status">
+      <svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12c0 1.2-4 6-9 6s-9-4.8-9-6c0-1.2 4-6 9-6s9 4.8 9 6z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <div class="sync-info">
+        <span class="sync-label">Cloud Sync</span>
+        <span class="sync-time" id="sync-time">Checking...</span>
       </div>
     </div>
   </section>

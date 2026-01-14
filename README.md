@@ -11,9 +11,20 @@ A browser extension to control video and audio playback speed with customizable 
 - **Universal Support** — Works on any website with HTML5 video (YouTube, Netflix, Vimeo, etc.)
 - **Keyboard Shortcuts** — Control playback speed without touching your mouse
 - **Two Display Modes** — Minimal badge or full control panel
+- **Frame-by-Frame Navigation** — Step through videos one frame at a time (`,` and `.` keys)
+- **Picture-in-Picture Control** — Floating speed controller when using PiP mode
+- **Pitch Correction Toggle** — Turn pitch correction ON/OFF (disable for chipmunk effect)
+- **Mouse Wheel Control** — Scroll on the controller to quickly adjust speed
+- **Right-Click Context Menu** — Quick speed selection via right-click on any video
+- **Long-Press Speed Boost** — Hold `G` to temporarily boost speed, release to restore
+- **URL Speed Rules** — Set automatic speeds for specific URL patterns (e.g., `/shorts` → 1x)
+- **Auto-Hide Controller** — Controller fades out after configurable delay
+- **Time Saved Tracking** — See how much time you've saved watching at faster speeds
 - **Remember Speed** — Saves your preferred speed per website
+- **Cloud Sync** — Settings sync across devices via Chrome/Firefox account
 - **Site Blacklist** — Disable the extension on specific sites
 - **Draggable Controller** — Position the overlay anywhere on the video
+- **Customizable Colors** — Change background and accent colors of the controller
 - **Export/Import Settings** — Backup and restore your configuration
 - **Dark Theme** — Beautiful, modern dark UI
 
@@ -28,6 +39,8 @@ A browser extension to control video and audio playback speed with customizable 
 | `G` | Jump to preferred speed (3.0x) |
 | `Z` | Rewind 10 seconds |
 | `X` | Fast forward 10 seconds |
+| `,` | Previous frame (pauses video) |
+| `.` | Next frame (pauses video) |
 
 All shortcuts are customizable in the extension popup.
 
@@ -54,7 +67,7 @@ All shortcuts are customizable in the extension popup.
 ## 🖼️ Screenshots
 
 ### Minimal Mode (Badge)
-The speed badge appears in the top-left corner of videos, showing the current playback rate.
+The speed badge appears in the top-right corner of videos, showing the current playback rate.
 
 ### Full Mode (Panel)
 A complete control panel with:
@@ -62,6 +75,16 @@ A complete control panel with:
 - Increase/Decrease buttons
 - Preset speed buttons (0.5x, 1x, 1.5x, 2x, 3x)
 - Seek controls (-10s, +10s)
+- Frame-by-frame controls (|◀ and ▶|)
+- Pitch correction toggle (ON/OFF)
+
+### Picture-in-Picture Mode
+When you enter PiP mode, a floating speed controller appears with:
+- Current speed display
+- Quick +/- speed buttons
+- Reset to 1x button
+- Draggable position
+- Scroll wheel support
 
 ### Popup Settings
 Configure all settings through an elegant dark-themed popup interface.
@@ -73,9 +96,14 @@ Configure all settings through an elegant dark-themed popup interface.
 | **Controller Mode** | Choose between minimal badge or full panel |
 | **Opacity** | Adjust controller transparency (10% - 100%) |
 | **Hide by Default** | Start with controller hidden, press `V` to show |
+| **Auto-Hide Delay** | Automatically hide controller after X seconds |
+| **Badge Colors** | Customize background and accent colors |
 | **Remember Speed** | Save playback speed per website |
 | **Force Saved Speed** | Override player's default speed |
 | **Work on Audio** | Also control `<audio>` elements |
+| **PiP Speed Indicator** | Show floating controller in Picture-in-Picture mode |
+| **URL Speed Rules** | Set automatic speeds for URL patterns |
+| **Site Blacklist** | Disable extension on specific domains |
 
 ## 🏗️ Project Structure
 
@@ -117,7 +145,7 @@ Video Speed Controller/
 
 ## 🔒 Privacy Policy
 
-This extension stores your preferences (playback speed, settings) locally in your browser. No data is collected, transmitted, or shared with any third parties.
+This extension stores your preferences (playback speed, settings) using your browser's sync storage. If you're signed into your browser account, settings will sync across your devices. No data is collected, transmitted, or shared with any third parties beyond the built-in browser sync.
 
 ## 📄 License
 
@@ -131,6 +159,24 @@ Contributions are welcome! Feel free to:
 - Submit pull requests
 
 ## 📝 Changelog
+
+### v1.2.0
+- Added frame-by-frame navigation (`,` and `.` keys)
+- Added Picture-in-Picture speed control with floating indicator
+- Added cloud sync status indicator
+- Added URL speed rules for automatic speed per URL pattern
+- Added customizable badge colors (background & accent)
+- Added PiP indicator toggle setting
+- Improved sync across devices visualization
+
+### v1.1.0
+- Added pitch correction toggle (ON/OFF for chipmunk effect)
+- Added mouse wheel speed control on controller
+- Added right-click context menu for quick speed selection
+- Added long-press speed boost (hold to boost, release to restore)
+- Added auto-hide controller with configurable delay
+- Added time saved tracking
+- Moved controller to top-right corner by default
 
 ### v1.0.0
 - Initial release
