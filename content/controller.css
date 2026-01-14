@@ -1,0 +1,228 @@
+/* Video Speed Controller - Overlay Styles */
+
+.vsc-controller {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 14px;
+  user-select: none;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+
+.vsc-controller.vsc-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.vsc-controller:hover {
+  opacity: 1 !important;
+}
+
+/* Minimal Mode - Speed Badge */
+.vsc-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 30px;
+  padding: 0 10px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e94560;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: grab;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.vsc-badge:active {
+  cursor: grabbing;
+}
+
+.vsc-badge:hover {
+  background: linear-gradient(135deg, #1f1f3a 0%, #1a2744 100%);
+  border-color: rgba(233, 69, 96, 0.3);
+}
+
+/* Full Mode - Control Panel */
+.vsc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+  padding: 12px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  cursor: grab;
+}
+
+.vsc-panel:active {
+  cursor: grabbing;
+}
+
+.vsc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vsc-panel-title {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.vsc-speed-display {
+  color: #e94560;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.vsc-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vsc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vsc-btn:hover {
+  background: rgba(233, 69, 96, 0.2);
+  border-color: rgba(233, 69, 96, 0.4);
+  color: #e94560;
+}
+
+.vsc-btn:active {
+  transform: scale(0.95);
+}
+
+.vsc-btn-reset {
+  width: auto;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.vsc-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vsc-preset {
+  flex: 1;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vsc-preset:hover {
+  background: rgba(233, 69, 96, 0.2);
+  border-color: rgba(233, 69, 96, 0.4);
+}
+
+.vsc-preset.active {
+  background: #e94560;
+  border-color: #e94560;
+  color: #fff;
+}
+
+.vsc-seek-controls {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vsc-seek-btn {
+  flex: 1;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vsc-seek-btn:hover {
+  background: rgba(79, 172, 254, 0.2);
+  border-color: rgba(79, 172, 254, 0.4);
+  color: #4facfe;
+}
+
+/* Toast Notification */
+.vsc-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2147483647;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 10px;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.vsc-toast.vsc-visible {
+  opacity: 1;
+}
+
+.vsc-toast-speed {
+  color: #e94560;
+}
+
+.vsc-toast-seek {
+  color: #4facfe;
+}
+
+/* Wrapper for video container positioning */
+.vsc-wrapper {
+  position: relative !important;
+}

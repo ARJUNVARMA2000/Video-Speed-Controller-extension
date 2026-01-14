@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Speed Controller</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-title">
+      <img src="../icons/icon48.png" alt="Logo">
+      <h1>Speed Controller</h1>
+    </div>
+    <div class="header-toggle">
+      <label class="toggle-switch">
+        <input type="checkbox" id="enabled" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </header>
+
+  <!-- Shortcuts Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M18 16h.01"/>
+      </svg>
+      Keyboard Shortcuts
+    </h2>
+    <div class="shortcuts-list" id="shortcuts-list">
+      <!-- Shortcuts will be rendered by JS -->
+    </div>
+  </section>
+
+  <!-- Controller Style Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 1v6m0 6v10M1 12h6m6 0h10"/>
+      </svg>
+      Controller Style
+    </h2>
+    <div class="settings-list">
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Controller Mode</span>
+          <span class="setting-desc">Choose display style</span>
+        </div>
+        <div class="select-wrapper">
+          <select class="select-input" id="controllerMode">
+            <option value="minimal">Minimal (Badge)</option>
+            <option value="full">Full (Panel)</option>
+          </select>
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Opacity</span>
+          <span class="setting-desc">Controller transparency</span>
+        </div>
+        <div class="range-container">
+          <input type="range" class="range-slider" id="opacity" min="0.1" max="1" step="0.1" value="0.8">
+          <span class="range-value" id="opacity-value">80%</span>
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Hide by Default</span>
+          <span class="setting-desc">Press shortcut to show</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="hideByDefault">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Other Settings Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      Other Settings
+    </h2>
+    <div class="settings-list">
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Remember Speed</span>
+          <span class="setting-desc">Save speed per website</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="rememberSpeed">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Force Saved Speed</span>
+          <span class="setting-desc">Override player defaults</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="forceSpeed">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Work on Audio</span>
+          <span class="setting-desc">Control audio elements too</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="workOnAudio">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Blacklist Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+      </svg>
+      Site Blacklist
+    </h2>
+    <div class="blacklist-container">
+      <div class="blacklist-input-row">
+        <input type="text" class="blacklist-input" id="blacklist-input" placeholder="Enter domain or regex pattern">
+        <button class="blacklist-add" id="blacklist-add">Add</button>
+      </div>
+      <div class="blacklist-list" id="blacklist-list">
+        <!-- Blacklist items rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button class="btn" id="btn-export">Export</button>
+    <button class="btn" id="btn-import">Import</button>
+    <button class="btn btn-danger" id="btn-reset">Reset</button>
+  </footer>
+
+  <!-- Hidden file input for import -->
+  <input type="file" class="hidden-input" id="import-input" accept=".json">
+
+  <!-- Notification -->
+  <div class="notification" id="notification"></div>
+
+  <script src="../browser-polyfill.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
