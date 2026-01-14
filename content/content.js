@@ -451,6 +451,16 @@
       updatePipIndicator();
     });
 
+    // Update controller position when video resizes
+    if (typeof ResizeObserver !== 'undefined') {
+      const resizeObserver = new ResizeObserver(() => {
+        updateControllerPosition(media);
+      });
+      resizeObserver.observe(media);
+      // Store reference for cleanup
+      media._vscResizeObserver = resizeObserver;
+    }
+
     // Set up Picture-in-Picture support
     if (media.tagName === 'VIDEO') {
       setupPipSupport(media);
@@ -487,6 +497,11 @@
     }
     if (activeElement === media) {
       activeElement = null;
+    }
+    // Clean up resize observer
+    if (media._vscResizeObserver) {
+      media._vscResizeObserver.disconnect();
+      delete media._vscResizeObserver;
     }
     cleanupVolumeBoostForMedia(media);
   }
@@ -660,18 +675,98 @@
       return;
     }
 
-    // Always wrap video in a positioned container so controller positions correctly
-    // This ensures the controller appears relative to the video, not some distant parent
+    // Special handling for YouTube - find the movie_player container
+    if (isYouTube()) {
+      const ytContainer = media.closest('#movie_player') || 
+                          media.closest('.html5-video-player') ||
+                          media.closest('ytd-player');
+      if (ytContainer) {
+        // Ensure the container is positioned
+        const style = window.getComputedStyle(ytContainer);
+        if (style.position === 'static') {
+          ytContainer.style.position = 'relative';
+        }
+        ytContainer.appendChild(controller);
+        console.log('Video Speed Pro: Controller attached to YouTube player');
+        return;
+      }
+    }
+    
+    // Strategy: Find the best container for the controller
+    // 1. Look for a positioned container that tightly wraps the video
+    // 2. If found and it's close to the video's size, use it
+    // 3. Otherwise, create a minimal wrapper
+    
+    const videoRect = media.getBoundingClientRect();
+    let container = media.parentElement;
+    let bestContainer = null;
+    
+    // Walk up the tree looking for a positioned parent that's a good fit
+    while (container && container !== document.body) {
+      const style = window.getComputedStyle(container);
+      if (style.position !== 'static') {
+        const containerRect = container.getBoundingClientRect();
+        // Check if this container is close to the video's size (within 50px)
+        // This helps find the actual video wrapper vs a page-wide container
+        const widthDiff = Math.abs(containerRect.width - videoRect.width);
+        const heightDiff = Math.abs(containerRect.height - videoRect.height);
+        
+        if (widthDiff < 100 && heightDiff < 100) {
+          bestContainer = container;
+          break;
+        }
+        
+        // Keep looking for a better fit, but remember the first positioned parent
+        if (!bestContainer) {
+          bestContainer = container;
+        }
+      }
+      container = container.parentElement;
+    }
+    
+    // If we found a good positioned container, use it
+    if (bestContainer) {
+      const containerRect = bestContainer.getBoundingClientRect();
+      const widthDiff = Math.abs(containerRect.width - videoRect.width);
+      const heightDiff = Math.abs(containerRect.height - videoRect.height);
+      
+      // If container is close to video size, just append the controller
+      if (widthDiff < 100 && heightDiff < 100) {
+        bestContainer.appendChild(controller);
+        console.log('Video Speed Pro: Controller attached to positioned container');
+        return;
+      }
+      
+      // Container is larger than video - need to position controller relative to video
+      // Calculate video's position within the container
+      const videoTop = videoRect.top - containerRect.top;
+      const videoRight = containerRect.right - videoRect.right;
+      
+      controller.style.top = (videoTop + 10) + 'px';
+      controller.style.right = (videoRight + 10) + 'px';
+      bestContainer.appendChild(controller);
+      console.log('Video Speed Pro: Controller attached with offset positioning');
+      return;
+    }
+    
+    // No suitable positioned container found - create a minimal wrapper
+    // Use a wrapper that doesn't affect layout
     const wrapper = document.createElement('div');
     wrapper.className = 'vsc-wrapper';
+    wrapper.style.cssText = 'position: relative; display: contents;';
     
-    // Copy important layout styles from video to wrapper
-    const mediaStyle = window.getComputedStyle(media);
-    const display = mediaStyle.display;
+    // 'display: contents' makes the wrapper invisible to layout
+    // But we need position:relative for the controller, so use a fallback
+    // Check if display:contents is supported
+    const supportsContents = CSS.supports('display', 'contents');
     
-    // Use inline-block for inline videos, block for block videos
-    const wrapperDisplay = (display === 'inline' || display === 'inline-block') ? 'inline-block' : 'block';
-    wrapper.style.cssText = `position: relative; display: ${wrapperDisplay}; width: fit-content; max-width: 100%;`;
+    if (!supportsContents) {
+      // Fallback: match the video's display
+      const mediaStyle = window.getComputedStyle(media);
+      const display = mediaStyle.display;
+      const wrapperDisplay = (display === 'inline' || display === 'inline-block') ? 'inline-block' : 'block';
+      wrapper.style.cssText = `position: relative; display: ${wrapperDisplay};`;
+    }
     
     // Check if parent still exists before modifying DOM
     if (media.parentElement) {
@@ -682,6 +777,26 @@
     } else {
       console.warn('Video Speed Pro: Media parent disappeared during positioning');
     }
+  }
+  
+  // Update controller position when video moves/resizes
+  function updateControllerPosition(media) {
+    const controller = mediaElements.get(media);
+    if (!controller || !controller.parentElement) return;
+    
+    // Skip if controller is in a wrapper (position is already correct)
+    if (controller.parentElement.classList.contains('vsc-wrapper')) return;
+    
+    const container = controller.parentElement;
+    const containerRect = container.getBoundingClientRect();
+    const videoRect = media.getBoundingClientRect();
+    
+    // Recalculate position
+    const videoTop = videoRect.top - containerRect.top;
+    const videoRight = containerRect.right - videoRect.right;
+    
+    controller.style.top = (videoTop + 10) + 'px';
+    controller.style.right = (videoRight + 10) + 'px';
   }
 
   // Make element draggable
@@ -826,7 +941,23 @@
   // Set playback speed
   function setSpeed(media, speed) {
     speed = Math.round(speed * 100) / 100; // Round to 2 decimals
+    
+    // Set speed and force it to stick (some sites like YouTube may try to reset it)
     media.playbackRate = speed;
+    
+    // For YouTube and similar sites, they may reset speed on certain events
+    // Use a brief interval to ensure the speed sticks
+    if (isYouTube()) {
+      let attempts = 0;
+      const enforceSpeed = setInterval(() => {
+        if (media.playbackRate !== speed && attempts < 5) {
+          media.playbackRate = speed;
+          attempts++;
+        } else {
+          clearInterval(enforceSpeed);
+        }
+      }, 100);
+    }
 
     updateControllerDisplay(media);
     highlightController(media);
@@ -839,6 +970,12 @@
         speed: speed
       });
     }
+  }
+  
+  // Check if current site is YouTube
+  function isYouTube() {
+    return window.location.hostname.includes('youtube.com') || 
+           window.location.hostname.includes('youtu.be');
   }
 
   // Seek media forward/backward

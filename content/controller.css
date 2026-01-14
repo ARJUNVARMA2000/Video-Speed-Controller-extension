@@ -323,18 +323,12 @@
 /* Wrapper for video container positioning */
 .vsc-wrapper {
   position: relative !important;
-  overflow: visible !important;
-  /* Ensure wrapper doesn't collapse or hide content */
-  min-width: 0;
-  min-height: 0;
+  /* Don't interfere with existing layout */
 }
 
-/* Ensure videos inside wrapper maintain their layout */
-.vsc-wrapper > video,
-.vsc-wrapper > audio {
-  display: block;
-  width: 100%;
-  height: auto;
+/* When using display:contents fallback, this helps maintain layout */
+.vsc-wrapper:not([style*="contents"]) {
+  display: inline-block;
 }
 
 /* Context Menu */
