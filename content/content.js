@@ -11,9 +11,18 @@
   let settings = null;
   let mediaElements = new Map(); // Map<element, controller>
   let activeElement = null;
-  let toastElement = null;
-  let toastTimeout = null;
   let isBlocked = false;
+
+  // Long-press state
+  let longPressActive = false;
+  let longPressOriginalSpeed = 1.0;
+
+  // Auto-hide timers
+  let autoHideTimers = new Map(); // Map<controller, timeoutId>
+
+  // Time tracking
+  let timeTrackingInterval = null;
+  let lastTrackTime = Date.now();
 
   // Initialize
   async function init() {
@@ -32,9 +41,6 @@
       return;
     }
 
-    // Create toast element
-    createToast();
-
     // Find existing media elements
     findMediaElements();
 
@@ -43,6 +49,12 @@
 
     // Set up keyboard listener
     setupKeyboardListener();
+
+    // Set up context menu
+    setupContextMenu();
+
+    // Start time tracking
+    startTimeTracking();
 
     // Listen for messages from background/popup
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -68,6 +80,13 @@
         break;
       case 'command':
         handleCommand(message.command);
+        break;
+      case 'setSpeed':
+        // Set speed from popup presets
+        if (!activeElement) activeElement = findActiveMedia();
+        if (activeElement) {
+          setSpeed(activeElement, message.speed);
+        }
         break;
       case 'tabReady':
         // Tab is ready, can send initial state if needed
@@ -96,26 +115,6 @@
         setSpeed(activeElement, 1.0);
         break;
     }
-  }
-
-  // Create toast notification element
-  function createToast() {
-    toastElement = document.createElement('div');
-    toastElement.className = 'vsc-toast';
-    document.body.appendChild(toastElement);
-  }
-
-  // Show toast notification
-  function showToast(text, type = 'speed') {
-    if (!toastElement) return;
-
-    toastElement.innerHTML = `<span class="vsc-toast-${type}">${text}</span>`;
-    toastElement.classList.add('vsc-visible');
-
-    if (toastTimeout) clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => {
-      toastElement.classList.remove('vsc-visible');
-    }, 800);
   }
 
   // Find all media elements on page
@@ -271,6 +270,10 @@
           <button class="vsc-seek-btn" data-seek="-10">-10s</button>
           <button class="vsc-seek-btn" data-seek="10">+10s</button>
         </div>
+        <div class="vsc-pitch-control">
+          <span class="vsc-pitch-label">Pitch Correction</span>
+          <button class="vsc-pitch-toggle" data-action="toggle-pitch" title="When ON, keeps original pitch. When OFF, pitch changes with speed (chipmunk effect).">ON</button>
+        </div>
       </div>
     `;
   }
@@ -350,11 +353,30 @@
         changeSpeed(media, -0.1);
       } else if (target.dataset.action === 'reset') {
         setSpeed(media, 1.0);
+      } else if (target.dataset.action === 'toggle-pitch') {
+        togglePitchCorrection(media, target);
       } else if (target.dataset.speed) {
         setSpeed(media, parseFloat(target.dataset.speed));
       } else if (target.dataset.seek) {
         seekMedia(media, parseInt(target.dataset.seek));
       }
+
+      // Reset auto-hide on interaction
+      resetAutoHide(controller);
+    });
+
+    // Mouse wheel to change speed
+    controller.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      changeSpeed(media, delta);
+      resetAutoHide(controller);
+    });
+
+    // Reset auto-hide on mouse enter
+    controller.addEventListener('mouseenter', () => {
+      resetAutoHide(controller);
     });
 
     // Prevent clicks from reaching video
@@ -373,8 +395,8 @@
     speed = Math.round(speed * 100) / 100; // Round to 2 decimals
     media.playbackRate = speed;
 
-    showToast(`${speed.toFixed(2)}x`, 'speed');
     updateControllerDisplay(media);
+    highlightController(media);
 
     // Save speed for site
     if (settings.rememberSpeed) {
@@ -389,8 +411,28 @@
   // Seek media forward/backward
   function seekMedia(media, seconds) {
     media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + seconds));
-    const prefix = seconds > 0 ? '+' : '';
-    showToast(`${prefix}${seconds}s`, 'seek');
+  }
+
+  // Toggle pitch correction (preservesPitch)
+  function togglePitchCorrection(media, button) {
+    // preservesPitch: true = pitch stays same (corrected), false = chipmunk effect
+    const currentlyPreserved = media.preservesPitch !== false;
+    media.preservesPitch = !currentlyPreserved;
+
+    // Update button text
+    button.textContent = media.preservesPitch ? 'ON' : 'OFF';
+    button.classList.toggle('vsc-pitch-off', !media.preservesPitch);
+  }
+
+  // Briefly highlight controller to show feedback
+  function highlightController(media) {
+    const controller = mediaElements.get(media);
+    if (!controller) return;
+
+    controller.classList.add('vsc-highlight');
+    setTimeout(() => {
+      controller.classList.remove('vsc-highlight');
+    }, 200);
   }
 
   // Update controller display
@@ -535,10 +577,137 @@
           setSpeed(activeElement, shortcut.value || 1.0);
           break;
         case 'preferred-speed':
-          setSpeed(activeElement, shortcut.value || 2.0);
+          // Long-press: hold to boost, release to restore
+          if (!longPressActive) {
+            longPressActive = true;
+            longPressOriginalSpeed = activeElement.playbackRate;
+            setSpeed(activeElement, shortcut.value || 2.0);
+          }
           break;
       }
     }, true);
+
+    // Key up for long-press release
+    document.addEventListener('keyup', (e) => {
+      if (e.target.matches('input, textarea, [contenteditable="true"]')) {
+        return;
+      }
+
+      const shortcut = settings.shortcuts?.find(s => {
+        if (!s.enabled) return false;
+        if (s.key.toUpperCase() !== e.key.toUpperCase()) return false;
+        return s.action === 'preferred-speed';
+      });
+
+      if (shortcut && longPressActive && activeElement) {
+        longPressActive = false;
+        setSpeed(activeElement, longPressOriginalSpeed);
+      }
+    }, true);
+  }
+
+  // Auto-hide functions
+  function resetAutoHide(controller) {
+    // Clear existing timer
+    const existingTimer = autoHideTimers.get(controller);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Show controller
+    controller.classList.remove('vsc-hidden');
+
+    // Start new timer if enabled
+    const delay = settings.autoHideDelay || 0;
+    if (delay > 0) {
+      const timer = setTimeout(() => {
+        controller.classList.add('vsc-hidden');
+      }, delay * 1000);
+      autoHideTimers.set(controller, timer);
+    }
+  }
+
+  // Context menu for quick speed access
+  function setupContextMenu() {
+    document.addEventListener('contextmenu', (e) => {
+      // Only show on video elements or controller
+      const video = e.target.closest('video');
+      const controller = e.target.closest('.vsc-controller');
+
+      if (!video && !controller) return;
+
+      // Remove existing menu
+      const existingMenu = document.querySelector('.vsc-context-menu');
+      if (existingMenu) existingMenu.remove();
+
+      e.preventDefault();
+
+      const media = video || findActiveMedia();
+      if (!media) return;
+
+      // Create context menu
+      const menu = document.createElement('div');
+      menu.className = 'vsc-context-menu';
+      menu.innerHTML = `
+        <div class="vsc-menu-title">Speed Controller</div>
+        <div class="vsc-menu-item" data-speed="0.5">0.5x</div>
+        <div class="vsc-menu-item" data-speed="0.75">0.75x</div>
+        <div class="vsc-menu-item" data-speed="1">1x (Normal)</div>
+        <div class="vsc-menu-item" data-speed="1.25">1.25x</div>
+        <div class="vsc-menu-item" data-speed="1.5">1.5x</div>
+        <div class="vsc-menu-item" data-speed="2">2x</div>
+        <div class="vsc-menu-item" data-speed="3">3x</div>
+      `;
+
+      // Position menu
+      menu.style.left = e.clientX + 'px';
+      menu.style.top = e.clientY + 'px';
+
+      document.body.appendChild(menu);
+
+      // Handle menu clicks
+      menu.addEventListener('click', (ev) => {
+        const item = ev.target.closest('.vsc-menu-item');
+        if (item && item.dataset.speed) {
+          setSpeed(media, parseFloat(item.dataset.speed));
+        }
+        menu.remove();
+      });
+
+      // Close menu on outside click
+      setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        }, { once: true });
+      }, 10);
+    });
+  }
+
+  // Time saved tracking
+  function startTimeTracking() {
+    timeTrackingInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - lastTrackTime) / 1000; // seconds
+      lastTrackTime = now;
+
+      // Find playing media at >1x speed
+      for (const [media] of mediaElements) {
+        if (!media.paused && media.playbackRate > 1) {
+          // Time saved = actual time * (speed - 1)
+          // e.g., 10 seconds at 2x saves 10 * (2-1) = 10 seconds
+          const timeSaved = elapsed * (media.playbackRate - 1);
+          updateTimeSaved(timeSaved);
+        }
+      }
+    }, 1000);
+  }
+
+  function updateTimeSaved(seconds) {
+    sendMessage({
+      type: 'addTimeSaved',
+      seconds: seconds
+    });
   }
 
   // Initialize when DOM is ready

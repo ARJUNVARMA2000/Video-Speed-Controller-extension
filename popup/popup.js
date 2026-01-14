@@ -37,6 +37,8 @@
     workOnAudio: document.getElementById('workOnAudio'),
     opacity: document.getElementById('opacity'),
     opacityValue: document.getElementById('opacity-value'),
+    autoHideDelay: document.getElementById('autoHideDelay'),
+    autoHideDelayValue: document.getElementById('autoHideDelay-value'),
     controllerMode: document.getElementById('controllerMode'),
     shortcutsList: document.getElementById('shortcuts-list'),
     blacklistInput: document.getElementById('blacklist-input'),
@@ -46,7 +48,9 @@
     btnImport: document.getElementById('btn-import'),
     btnReset: document.getElementById('btn-reset'),
     importInput: document.getElementById('import-input'),
-    notification: document.getElementById('notification')
+    notification: document.getElementById('notification'),
+    speedPresetsBar: document.querySelector('.speed-presets-bar'),
+    timeSaved: document.getElementById('time-saved')
   };
 
   // Initialize popup
@@ -72,8 +76,34 @@
     elements.opacityValue.textContent = Math.round((settings.opacity || 0.8) * 100) + '%';
     elements.controllerMode.value = settings.controllerMode || 'minimal';
 
+    // Auto-hide delay
+    const autoHide = settings.autoHideDelay || 0;
+    elements.autoHideDelay.value = autoHide;
+    elements.autoHideDelayValue.textContent = autoHide === 0 ? 'Off' : autoHide + 's';
+
+    // Time saved display
+    updateTimeSavedDisplay();
+
     renderShortcuts();
     renderBlacklist();
+  }
+
+  // Format and display time saved
+  function updateTimeSavedDisplay() {
+    const totalSeconds = settings.timeSaved || 0;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+
+    let display = '';
+    if (hours > 0) {
+      display = `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      display = `${minutes}m ${seconds}s`;
+    } else {
+      display = `${seconds}s`;
+    }
+    elements.timeSaved.textContent = display;
   }
 
   // Render shortcuts list
@@ -137,6 +167,33 @@
     elements.controllerMode.addEventListener('change', () => {
       settings.controllerMode = elements.controllerMode.value;
       saveSettings();
+    });
+
+    // Auto-hide delay
+    elements.autoHideDelay.addEventListener('input', () => {
+      const value = parseInt(elements.autoHideDelay.value);
+      elements.autoHideDelayValue.textContent = value === 0 ? 'Off' : value + 's';
+      settings.autoHideDelay = value;
+      saveSettings();
+    });
+
+    // Speed presets bar click
+    elements.speedPresetsBar.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.speed-preset-btn');
+      if (!btn) return;
+
+      const speed = parseFloat(btn.dataset.speed);
+
+      // Send speed to active tab
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'setSpeed', speed });
+      }
+
+      // Update button states
+      elements.speedPresetsBar.querySelectorAll('.speed-preset-btn').forEach(b => {
+        b.classList.toggle('active', parseFloat(b.dataset.speed) === speed);
+      });
     });
 
     // Shortcuts list events (delegated)

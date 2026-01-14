@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   forceSpeed: false,
   workOnAudio: false,
   opacity: 0.8,
+  autoHideDelay: 0,
   controllerMode: 'minimal',
   shortcuts: [
     { action: 'show-controller', key: 'V', modifiers: [], enabled: true },
@@ -18,7 +19,8 @@ const DEFAULT_SETTINGS = {
     { action: 'preferred-speed', key: 'G', modifiers: [], value: 3.0, enabled: true }
   ],
   blacklist: [],
-  savedSpeeds: {}
+  savedSpeeds: {},
+  timeSaved: 0
 };
 
 // Initialize default settings on install
@@ -104,6 +106,12 @@ async function handleMessage(message, sender) {
       await chrome.storage.sync.clear();
       await chrome.storage.sync.set(DEFAULT_SETTINGS);
       return { success: true, settings: DEFAULT_SETTINGS };
+
+    case 'addTimeSaved':
+      const timeData = await chrome.storage.sync.get(['timeSaved']);
+      const newTimeSaved = (timeData.timeSaved || 0) + message.seconds;
+      await chrome.storage.sync.set({ timeSaved: newTimeSaved });
+      return { success: true, timeSaved: newTimeSaved };
 
     default:
       return { error: 'Unknown message type' };

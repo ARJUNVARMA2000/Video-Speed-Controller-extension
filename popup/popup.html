@@ -21,6 +21,29 @@
     </div>
   </header>
 
+  <!-- Quick Speed Control -->
+  <section class="section speed-control-section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="5,3 19,12 5,21"/>
+      </svg>
+      Quick Speed
+    </h2>
+    <div class="speed-presets-bar">
+      <button class="speed-preset-btn" data-speed="0.5">0.5x</button>
+      <button class="speed-preset-btn" data-speed="0.75">0.75x</button>
+      <button class="speed-preset-btn" data-speed="1">1x</button>
+      <button class="speed-preset-btn" data-speed="1.25">1.25x</button>
+      <button class="speed-preset-btn" data-speed="1.5">1.5x</button>
+      <button class="speed-preset-btn" data-speed="2">2x</button>
+      <button class="speed-preset-btn" data-speed="3">3x</button>
+    </div>
+    <div class="time-saved-display">
+      <span class="time-saved-label">Time Saved</span>
+      <span class="time-saved-value" id="time-saved">0m 0s</span>
+    </div>
+  </section>
+
   <!-- Shortcuts Section -->
   <section class="section">
     <h2 class="section-title">
@@ -76,6 +99,16 @@
           <input type="checkbox" id="hideByDefault">
           <span class="toggle-slider"></span>
         </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Auto-Hide Timer</span>
+          <span class="setting-desc">Fade after inactivity (0 = off)</span>
+        </div>
+        <div class="range-container">
+          <input type="range" class="range-slider" id="autoHideDelay" min="0" max="10" step="1" value="0">
+          <span class="range-value" id="autoHideDelay-value">Off</span>
+        </div>
       </div>
     </div>
   </section>

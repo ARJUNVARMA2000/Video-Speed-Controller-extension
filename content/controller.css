@@ -3,7 +3,7 @@
 .vsc-controller {
   position: absolute;
   top: 10px;
-  left: 10px;
+  right: 10px;
   z-index: 2147483647;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   font-size: 14px;
@@ -188,41 +188,100 @@
   color: #4facfe;
 }
 
-/* Toast Notification */
-.vsc-toast {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2147483647;
-  padding: 16px 32px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 1px solid rgba(233, 69, 96, 0.3);
-  border-radius: 10px;
+/* Pitch Correction Toggle */
+.vsc-pitch-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vsc-pitch-label {
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
-.vsc-toast.vsc-visible {
-  opacity: 1;
+.vsc-pitch-toggle {
+  min-width: 40px;
+  height: 24px;
+  padding: 0 10px;
+  background: rgba(46, 204, 113, 0.2);
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  border-radius: 12px;
+  color: #2ecc71;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.vsc-toast-speed {
-  color: #e94560;
+.vsc-pitch-toggle:hover {
+  background: rgba(46, 204, 113, 0.3);
 }
 
-.vsc-toast-seek {
-  color: #4facfe;
+.vsc-pitch-toggle.vsc-pitch-off {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: rgba(231, 76, 60, 0.4);
+  color: #e74c3c;
+}
+
+.vsc-pitch-toggle.vsc-pitch-off:hover {
+  background: rgba(231, 76, 60, 0.3);
+}
+
+/* Highlight animation for feedback */
+.vsc-controller.vsc-highlight .vsc-badge,
+.vsc-controller.vsc-highlight .vsc-speed-display {
+  color: #fff;
+  text-shadow: 0 0 10px #e94560;
+}
+
+.vsc-controller.vsc-highlight .vsc-badge {
+  border-color: #e94560;
+  box-shadow: 0 0 15px rgba(233, 69, 96, 0.5);
 }
 
 /* Wrapper for video container positioning */
 .vsc-wrapper {
   position: relative !important;
+}
+
+/* Context Menu */
+.vsc-context-menu {
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 150px;
+  padding: 8px 0;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.vsc-menu-title {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #e94560;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
+}
+
+.vsc-menu-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vsc-menu-item:hover {
+  background: rgba(233, 69, 96, 0.2);
+  color: #e94560;
 }
