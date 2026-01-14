@@ -70,7 +70,7 @@
 
     // Stop time tracking
     if (timeTrackingInterval) {
-      clearInterval(timeTrackingInterval);
+      cancelAnimationFrame(timeTrackingInterval);
       timeTrackingInterval = null;
     }
 
@@ -1855,29 +1855,50 @@
     }
   }
 
-  // Time saved tracking
+  // Time saved tracking using requestAnimationFrame for better efficiency
+  // Only runs when tab is visible, reducing CPU usage in background
   function startTimeTracking() {
-    timeTrackingInterval = setInterval(() => {
-      // Skip if context is invalidated
+    let lastFrameTime = performance.now();
+    const TRACK_INTERVAL = 1000; // Track every ~1 second
+    let accumulator = 0;
+
+    function trackFrame(currentTime) {
+      // Stop if context is invalidated
       if (contextInvalidated) {
-        clearInterval(timeTrackingInterval);
         return;
       }
 
-      const now = Date.now();
-      const elapsed = (now - lastTrackTime) / 1000; // seconds
-      lastTrackTime = now;
+      const deltaTime = currentTime - lastFrameTime;
+      lastFrameTime = currentTime;
 
-      // Find playing media at >1x speed
-      for (const [media] of mediaElements) {
-        if (!media.paused && media.playbackRate > 1) {
-          // Time saved = actual time * (speed - 1)
-          // e.g., 10 seconds at 2x saves 10 * (2-1) = 10 seconds
-          const timeSaved = elapsed * (media.playbackRate - 1);
-          updateTimeSaved(timeSaved);
+      // Skip tracking when tab is hidden (saves CPU)
+      if (document.hidden) {
+        timeTrackingInterval = requestAnimationFrame(trackFrame);
+        return;
+      }
+
+      accumulator += deltaTime;
+
+      // Only update every ~1 second to avoid excessive processing
+      if (accumulator >= TRACK_INTERVAL) {
+        const elapsed = accumulator / 1000; // Convert to seconds
+        accumulator = 0;
+
+        // Find playing media at >1x speed
+        for (const [media] of mediaElements) {
+          if (!media.paused && media.playbackRate > 1) {
+            // Time saved = actual time * (speed - 1)
+            // e.g., 10 seconds at 2x saves 10 * (2-1) = 10 seconds
+            const timeSaved = elapsed * (media.playbackRate - 1);
+            updateTimeSaved(timeSaved);
+          }
         }
       }
-    }, 1000);
+
+      timeTrackingInterval = requestAnimationFrame(trackFrame);
+    }
+
+    timeTrackingInterval = requestAnimationFrame(trackFrame);
   }
 
   function updateTimeSaved(seconds) {
@@ -1890,53 +1911,65 @@
     });
   }
 
+  // Handle URL change - shared logic for all detection methods
+  async function handleUrlChange() {
+    // Skip if context is invalidated
+    if (contextInvalidated) return;
+
+    const currentUrl = window.location.href;
+    if (currentUrl === lastUrl) return;
+
+    lastUrl = currentUrl;
+    console.log('Video Speed Controller: URL changed, checking rules');
+
+    // Reload intro/outro settings for new URL
+    introOutroSettings = await sendMessage({
+      type: 'getIntroOutroSettings',
+      hostname: window.location.hostname
+    });
+
+    // Re-apply speed and reset intro/outro state for new URL
+    for (const [media] of mediaElements) {
+      await applyInitialSpeed(media);
+      resetIntroOutroState(media);
+    }
+  }
+
   // Detect URL changes for SPAs (e.g., YouTube navigation)
+  // Uses Navigation API when available (Chrome 102+) for instant detection,
+  // falls back to polling for older browsers
   function startUrlChangeDetection() {
-    // Check for URL changes periodically
-    const urlCheckInterval = setInterval(async () => {
+    // Try to use the modern Navigation API (Chrome 102+, no Firefox/Safari yet)
+    if ('navigation' in window) {
+      try {
+        window.navigation.addEventListener('navigatesuccess', handleUrlChange);
+        console.log('Video Speed Controller: Using Navigation API for URL detection');
+      } catch (e) {
+        // Navigation API not fully supported, fall back to polling
+        startPollingUrlDetection();
+      }
+    } else {
+      // Fall back to polling for older browsers
+      startPollingUrlDetection();
+    }
+
+    // Also listen for popstate (back/forward navigation) as backup
+    window.addEventListener('popstate', handleUrlChange);
+  }
+
+  // Fallback: Poll for URL changes (for browsers without Navigation API)
+  function startPollingUrlDetection() {
+    console.log('Video Speed Controller: Using polling for URL detection');
+    
+    const urlCheckInterval = setInterval(() => {
       // Skip if context is invalidated
       if (contextInvalidated) {
         clearInterval(urlCheckInterval);
         return;
       }
 
-      const currentUrl = window.location.href;
-      if (currentUrl !== lastUrl) {
-        lastUrl = currentUrl;
-        console.log('Video Speed Controller: URL changed, checking rules');
-
-        // Reload intro/outro settings for new URL
-        introOutroSettings = await sendMessage({
-          type: 'getIntroOutroSettings',
-          hostname: window.location.hostname
-        });
-
-        // Re-apply speed and reset intro/outro state for new URL
-        for (const [media] of mediaElements) {
-          await applyInitialSpeed(media);
-          resetIntroOutroState(media);
-        }
-      }
+      handleUrlChange();
     }, 500);
-
-    // Also listen for popstate (back/forward navigation)
-    window.addEventListener('popstate', async () => {
-      // Skip if context is invalidated
-      if (contextInvalidated) return;
-
-      lastUrl = window.location.href;
-
-      // Reload intro/outro settings
-      introOutroSettings = await sendMessage({
-        type: 'getIntroOutroSettings',
-        hostname: window.location.hostname
-      });
-
-      for (const [media] of mediaElements) {
-        await applyInitialSpeed(media);
-        resetIntroOutroState(media);
-      }
-    });
   }
 
   // Initialize when DOM is ready
