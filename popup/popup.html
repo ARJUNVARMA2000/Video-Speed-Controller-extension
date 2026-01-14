@@ -44,28 +44,66 @@
     </div>
   </section>
 
-  <!-- Shortcuts Section -->
+  <!-- Behavior Settings Section -->
   <section class="section">
     <h2 class="section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="2" y="4" width="20" height="16" rx="2"/>
-        <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M18 16h.01"/>
+        <path d="M12 20V10M18 20V4M6 20v-4"/>
       </svg>
-      Keyboard Shortcuts
+      Behavior
     </h2>
-    <div class="shortcuts-list" id="shortcuts-list">
-      <!-- Shortcuts will be rendered by JS -->
+    <div class="settings-list">
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Remember Speed</span>
+          <span class="setting-desc">Save speed per website</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="rememberSpeed">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Force Saved Speed</span>
+          <span class="setting-desc">Override player defaults</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="forceSpeed">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Work on Audio</span>
+          <span class="setting-desc">Control audio elements too</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="workOnAudio">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">PiP Speed Indicator</span>
+          <span class="setting-desc">Show floating controller in PiP mode</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="showPipIndicator" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
   </section>
 
-  <!-- Controller Style Section -->
+  <!-- Controller Appearance Section -->
   <section class="section">
     <h2 class="section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
         <path d="M12 1v6m0 6v10M1 12h6m6 0h10"/>
       </svg>
-      Controller Style
+      Appearance
     </h2>
     <div class="settings-list">
       <div class="setting-item">
@@ -129,55 +167,101 @@
     </div>
   </section>
 
-  <!-- Other Settings Section -->
+  <!-- Shortcuts Section -->
   <section class="section">
     <h2 class="section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 6v6l4 2"/>
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M18 16h.01"/>
       </svg>
-      Other Settings
+      Keyboard Shortcuts
     </h2>
+    <div class="shortcuts-list" id="shortcuts-list">
+      <!-- Shortcuts will be rendered by JS -->
+    </div>
+  </section>
+
+  <!-- Intro/Outro Skip Section -->
+  <section class="section">
+    <h2 class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="5,4 15,12 5,20"/>
+        <line x1="19" y1="5" x2="19" y2="19"/>
+      </svg>
+      Intro/Outro Skip
+    </h2>
+    <p class="section-desc">Automatically skip intros and outros, or use hotkeys to skip manually</p>
     <div class="settings-list">
       <div class="setting-item">
         <div class="setting-label">
-          <span class="setting-name">Remember Speed</span>
-          <span class="setting-desc">Save speed per website</span>
+          <span class="setting-name">Enable Intro/Outro Skip</span>
+          <span class="setting-desc">Auto-skip or use hotkeys</span>
         </div>
         <label class="toggle-switch">
-          <input type="checkbox" id="rememberSpeed">
+          <input type="checkbox" id="introOutroEnabled">
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="setting-item">
         <div class="setting-label">
-          <span class="setting-name">Force Saved Speed</span>
-          <span class="setting-desc">Override player defaults</span>
+          <span class="setting-name">Default Intro Skip</span>
+          <span class="setting-desc">Seconds to skip at start</span>
+        </div>
+        <div class="number-input-wrapper">
+          <input type="number" class="number-input" id="defaultIntroSkip" min="0" max="300" step="1" value="0">
+          <span class="number-unit">s</span>
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Default Outro Skip</span>
+          <span class="setting-desc">Seconds before end to skip</span>
+        </div>
+        <div class="number-input-wrapper">
+          <input type="number" class="number-input" id="defaultOutroSkip" min="0" max="300" step="1" value="0">
+          <span class="number-unit">s</span>
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name">Auto-Skip on Play</span>
+          <span class="setting-desc">Skip intro automatically when video starts</span>
         </div>
         <label class="toggle-switch">
-          <input type="checkbox" id="forceSpeed">
+          <input type="checkbox" id="autoSkipIntro">
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="setting-item">
         <div class="setting-label">
-          <span class="setting-name">Work on Audio</span>
-          <span class="setting-desc">Control audio elements too</span>
+          <span class="setting-name">Skip Intro Hotkey</span>
+          <span class="setting-desc">Press to skip intro manually</span>
         </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="workOnAudio">
-          <span class="toggle-slider"></span>
-        </label>
+        <div class="shortcut-key">
+          <input type="text" class="key-input intro-outro-key" id="skipIntroKey" value="I" readonly>
+        </div>
       </div>
       <div class="setting-item">
         <div class="setting-label">
-          <span class="setting-name">PiP Speed Indicator</span>
-          <span class="setting-desc">Show floating controller in PiP mode</span>
+          <span class="setting-name">Skip Outro Hotkey</span>
+          <span class="setting-desc">Press to skip to end/next</span>
         </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="showPipIndicator" checked>
-          <span class="toggle-slider"></span>
-        </label>
+        <div class="shortcut-key">
+          <input type="text" class="key-input intro-outro-key" id="skipOutroKey" value="O" readonly>
+        </div>
+      </div>
+    </div>
+    <div class="intro-outro-site-rules">
+      <h3 class="subsection-title">Per-Site Rules</h3>
+      <p class="section-desc">Override intro/outro times for specific sites</p>
+      <div class="intro-outro-rule-input-row">
+        <input type="text" class="intro-outro-site-input" id="intro-outro-site" placeholder="Site (e.g., youtube.com)">
+        <input type="number" class="intro-outro-time-input" id="intro-outro-intro" placeholder="Intro" min="0" max="300" step="1">
+        <input type="number" class="intro-outro-time-input" id="intro-outro-outro" placeholder="Outro" min="0" max="300" step="1">
+        <button class="intro-outro-rule-add" id="intro-outro-rule-add">Add</button>
+      </div>
+      <div class="intro-outro-rules-list" id="intro-outro-rules-list">
+        <!-- Per-site rules rendered by JS -->
       </div>
     </div>
   </section>
