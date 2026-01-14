@@ -23,7 +23,11 @@ const DEFAULT_SETTINGS = {
     { action: 'reset-speed', key: 'R', modifiers: [], value: 1.0, enabled: true },
     { action: 'preferred-speed', key: 'G', modifiers: [], value: 3.0, enabled: true },
     { action: 'frame-forward', key: '.', modifiers: [], enabled: true },
-    { action: 'frame-backward', key: ',', modifiers: [], enabled: true }
+    { action: 'frame-backward', key: ',', modifiers: [], enabled: true },
+    { action: 'screenshot', key: 'P', modifiers: [], enabled: true },
+    { action: 'set-loop-a', key: '[', modifiers: [], enabled: true },
+    { action: 'set-loop-b', key: ']', modifiers: [], enabled: true },
+    { action: 'clear-loop', key: '\\', modifiers: [], enabled: true }
   ],
   blacklist: [],
   savedSpeeds: {},
@@ -46,7 +50,13 @@ const DEFAULT_SETTINGS = {
   autoSkipIntro: false,
   skipIntroKey: 'I',
   skipOutroKey: 'O',
-  introOutroSiteRules: []
+  introOutroSiteRules: [],
+  // Video Filters
+  rememberFilters: false,
+  savedFilters: {},
+  // Volume Boost
+  rememberVolumeBoost: false,
+  savedVolumeBoost: {}
 };
 
 // Initialize default settings on install
@@ -236,6 +246,40 @@ async function handleMessage(message, sender) {
         skipOutroKey: introOutroData.skipOutroKey || 'O',
         siteSpecific: false
       };
+
+    // Video Filters
+    case 'saveFilters': {
+      const filterData = await chrome.storage.sync.get(['savedFilters']);
+      const savedFilters = filterData.savedFilters || {};
+      savedFilters[message.hostname] = message.filters;
+      await chrome.storage.sync.set({ savedFilters });
+      return { success: true };
+    }
+
+    case 'getSavedFilters': {
+      const filterData = await chrome.storage.sync.get(['savedFilters', 'rememberFilters']);
+      if (filterData.rememberFilters && filterData.savedFilters) {
+        return { filters: filterData.savedFilters[message.hostname] || null };
+      }
+      return { filters: null };
+    }
+
+    // Volume Boost
+    case 'saveVolumeBoost': {
+      const volumeData = await chrome.storage.sync.get(['savedVolumeBoost']);
+      const savedVolumeBoost = volumeData.savedVolumeBoost || {};
+      savedVolumeBoost[message.hostname] = message.level;
+      await chrome.storage.sync.set({ savedVolumeBoost });
+      return { success: true };
+    }
+
+    case 'getSavedVolumeBoost': {
+      const volumeData = await chrome.storage.sync.get(['savedVolumeBoost', 'rememberVolumeBoost']);
+      if (volumeData.rememberVolumeBoost && volumeData.savedVolumeBoost) {
+        return { level: volumeData.savedVolumeBoost[message.hostname] || null };
+      }
+      return { level: null };
+    }
 
     default:
       return { error: 'Unknown message type' };

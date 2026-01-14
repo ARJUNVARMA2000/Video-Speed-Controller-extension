@@ -37,6 +37,20 @@
   let introSkippedVideos = new WeakSet(); // Track which videos have had intro skipped
   let outroSkippedVideos = new WeakSet(); // Track which videos have had outro action triggered
 
+  // A-B Loop state
+  let abLoopState = new Map(); // Map<media, { pointA: number, pointB: number, active: boolean }>
+
+  // Video Filters state
+  let videoFilters = {
+    brightness: 100,
+    contrast: 100,
+    saturation: 100
+  };
+
+  // Volume Boost state
+  let audioContextMap = new Map(); // Map<media, { audioContext, gainNode, sourceNode }>
+  let volumeBoostLevel = 100; // 100 = normal, up to 400
+
   // Check if extension context is still valid
   function isContextValid() {
     try {
@@ -109,6 +123,12 @@
       hostname: window.location.hostname
     });
 
+    // Load saved filters
+    await loadSavedFilters();
+
+    // Load saved volume boost
+    await loadSavedVolumeBoost();
+
     // Find existing media elements
     findMediaElements();
 
@@ -180,6 +200,9 @@
     switch (message.type) {
       case 'settingsUpdated':
         settings = message.settings;
+        if (settings.preservePitch === undefined) {
+          settings.preservePitch = true;
+        }
         updateAllControllers();
         // Reload intro/outro settings
         reloadIntroOutroSettings();
@@ -315,6 +338,16 @@
     // Set up intro/outro skip
     setupIntroOutroSkip(media);
 
+    // Apply video filters if saved
+    if (media.tagName === 'VIDEO') {
+      applyVideoFilters(media);
+    }
+
+    // Apply volume boost if saved
+    if (volumeBoostLevel > 100) {
+      setVolumeBoost(media, volumeBoostLevel);
+    }
+
     console.log('Video Speed Controller: Attached to', media.tagName);
   }
 
@@ -388,6 +421,12 @@
       ? 'title="When ON, keeps original pitch. When OFF, pitch changes with speed (chipmunk effect)."'
       : 'title="Pitch correction not supported for this media." disabled aria-disabled="true"';
 
+    const loopState = abLoopState.get(media);
+    const loopText = loopState && loopState.active 
+      ? `${formatTime(loopState.pointA)} → ${formatTime(loopState.pointB)}`
+      : 'Not set';
+    const loopActive = loopState && loopState.active ? 'active' : '';
+
     return `
       <div class="vsc-panel">
         <div class="vsc-panel-header">
@@ -418,6 +457,61 @@
         <div class="vsc-pitch-control">
           <span class="vsc-pitch-label">Pitch Correction</span>
           <button class="${pitchClasses.join(' ')}" data-action="toggle-pitch" ${pitchAttrs}>${pitchLabel}</button>
+        </div>
+        
+        <!-- A-B Loop Controls -->
+        <div class="vsc-loop-section">
+          <div class="vsc-section-header">
+            <span class="vsc-section-title">A-B Loop</span>
+            <span class="vsc-loop-indicator ${loopActive}">${loopText}</span>
+          </div>
+          <div class="vsc-loop-controls">
+            <button class="vsc-loop-btn ${loopState?.pointA !== null ? 'set' : ''}" data-action="set-loop-a" title="Set loop start (A)">A</button>
+            <button class="vsc-loop-btn ${loopState?.pointB !== null ? 'set' : ''}" data-action="set-loop-b" title="Set loop end (B)">B</button>
+            <button class="vsc-loop-btn vsc-loop-clear" data-action="clear-loop" title="Clear loop">✕</button>
+          </div>
+        </div>
+
+        <!-- Volume Boost -->
+        <div class="vsc-volume-section">
+          <div class="vsc-section-header">
+            <span class="vsc-section-title">Volume Boost</span>
+            <span class="vsc-volume-value ${volumeBoostLevel > 100 ? 'boosted' : ''}">${volumeBoostLevel}%</span>
+          </div>
+          <div class="vsc-volume-slider-container">
+            <input type="range" class="vsc-slider vsc-volume-slider" data-action="volume-boost" min="100" max="400" step="10" value="${volumeBoostLevel}">
+          </div>
+        </div>
+
+        <!-- Video Filters -->
+        <div class="vsc-filters-section">
+          <div class="vsc-section-header">
+            <span class="vsc-section-title">Filters</span>
+            <button class="vsc-filter-reset" data-action="reset-filters" title="Reset filters">⟲</button>
+          </div>
+          <div class="vsc-filter-row">
+            <span class="vsc-filter-label">☀</span>
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="brightness" min="0" max="200" value="${videoFilters.brightness}">
+            <span class="vsc-filter-value vsc-brightness-value">${videoFilters.brightness}%</span>
+          </div>
+          <div class="vsc-filter-row">
+            <span class="vsc-filter-label">◐</span>
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="contrast" min="0" max="200" value="${videoFilters.contrast}">
+            <span class="vsc-filter-value vsc-contrast-value">${videoFilters.contrast}%</span>
+          </div>
+          <div class="vsc-filter-row">
+            <span class="vsc-filter-label">🎨</span>
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="saturation" min="0" max="200" value="${videoFilters.saturation}">
+            <span class="vsc-filter-value vsc-saturation-value">${videoFilters.saturation}%</span>
+          </div>
+        </div>
+
+        <!-- Screenshot -->
+        <div class="vsc-screenshot-section">
+          <button class="vsc-screenshot-btn" data-action="screenshot" title="Capture screenshot (P)">
+            <span class="vsc-screenshot-icon">📷</span>
+            <span>Screenshot</span>
+          </button>
         </div>
       </div>
     `;
@@ -495,14 +589,15 @@
       e.preventDefault();
       
       const target = e.target;
+      const action = target.dataset.action || target.closest('[data-action]')?.dataset.action;
 
-      if (target.dataset.action === 'increase') {
+      if (action === 'increase') {
         changeSpeed(media, 0.1);
-      } else if (target.dataset.action === 'decrease') {
+      } else if (action === 'decrease') {
         changeSpeed(media, -0.1);
-      } else if (target.dataset.action === 'reset') {
+      } else if (action === 'reset') {
         setSpeed(media, 1.0);
-      } else if (target.dataset.action === 'toggle-pitch') {
+      } else if (action === 'toggle-pitch') {
         togglePitchCorrection(media, target);
       } else if (target.dataset.speed) {
         setSpeed(media, parseFloat(target.dataset.speed));
@@ -511,8 +606,45 @@
       } else if (target.dataset.frame) {
         stepFrame(media, target.dataset.frame === 'forward');
       }
+      // A-B Loop actions
+      else if (action === 'set-loop-a') {
+        setPointA(media);
+      } else if (action === 'set-loop-b') {
+        setPointB(media);
+      } else if (action === 'clear-loop') {
+        clearABLoop(media);
+      }
+      // Filter actions
+      else if (action === 'reset-filters') {
+        resetFilters(media);
+      }
+      // Screenshot action
+      else if (action === 'screenshot') {
+        captureScreenshot(media);
+      }
 
       // Reset auto-hide on interaction
+      resetAutoHide(controller);
+    });
+
+    // Filter sliders input
+    controller.addEventListener('input', (e) => {
+      e.stopPropagation();
+      const target = e.target;
+      
+      // Volume boost slider
+      if (target.dataset.action === 'volume-boost') {
+        setVolumeBoost(media, parseInt(target.value));
+      }
+      // Filter sliders
+      else if (target.dataset.filter === 'brightness') {
+        setBrightness(media, parseInt(target.value));
+      } else if (target.dataset.filter === 'contrast') {
+        setContrast(media, parseInt(target.value));
+      } else if (target.dataset.filter === 'saturation') {
+        setSaturation(media, parseInt(target.value));
+      }
+
       resetAutoHide(controller);
     });
 
@@ -773,6 +905,429 @@
     });
     
     console.log('Video Speed Controller: Intro/Outro settings reloaded', introOutroSettings);
+  }
+
+  // ==========================================
+  // SCREENSHOT CAPTURE
+  // ==========================================
+
+  // Capture screenshot of current video frame
+  function captureScreenshot(media) {
+    if (!media || media.tagName !== 'VIDEO') {
+      showFeedback(media, 'Screenshot', 'Video only');
+      return;
+    }
+
+    if (media.readyState < 2) {
+      showFeedback(media, 'Screenshot', 'Video not ready');
+      return;
+    }
+
+    try {
+      // Create canvas with video dimensions
+      const canvas = document.createElement('canvas');
+      canvas.width = media.videoWidth || media.clientWidth;
+      canvas.height = media.videoHeight || media.clientHeight;
+
+      // Draw current frame to canvas
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
+
+      // Convert to blob and download
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          showFeedback(media, 'Screenshot', 'Failed');
+          return;
+        }
+
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `screenshot-${timestamp}.png`;
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showFeedback(media, 'Screenshot', 'Saved!');
+        console.log('Video Speed Controller: Screenshot captured', filename);
+      }, 'image/png', 1.0);
+    } catch (e) {
+      console.error('Video Speed Controller: Screenshot failed', e);
+      showFeedback(media, 'Screenshot', 'Error');
+    }
+  }
+
+  // ==========================================
+  // A-B LOOP
+  // ==========================================
+
+  // Set point A (loop start)
+  function setPointA(media) {
+    if (!media) return;
+
+    const state = abLoopState.get(media) || { pointA: null, pointB: null, active: false };
+    state.pointA = media.currentTime;
+    abLoopState.set(media, state);
+
+    showFeedback(media, 'Loop A', formatTime(state.pointA));
+    updateControllerLoopDisplay(media);
+    console.log('Video Speed Controller: Set loop point A at', state.pointA);
+
+    // If both points are set, activate the loop
+    if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
+      state.active = true;
+      startABLoop(media);
+    }
+  }
+
+  // Set point B (loop end)
+  function setPointB(media) {
+    if (!media) return;
+
+    const state = abLoopState.get(media) || { pointA: null, pointB: null, active: false };
+    state.pointB = media.currentTime;
+    abLoopState.set(media, state);
+
+    showFeedback(media, 'Loop B', formatTime(state.pointB));
+    updateControllerLoopDisplay(media);
+    console.log('Video Speed Controller: Set loop point B at', state.pointB);
+
+    // If both points are set and A < B, activate the loop
+    if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
+      state.active = true;
+      startABLoop(media);
+    }
+  }
+
+  // Start A-B loop monitoring
+  function startABLoop(media) {
+    const handler = () => {
+      const state = abLoopState.get(media);
+      if (!state || !state.active) return;
+
+      if (media.currentTime >= state.pointB) {
+        media.currentTime = state.pointA;
+      }
+    };
+
+    // Remove existing handler if any
+    media._abLoopHandler = handler;
+    media.addEventListener('timeupdate', handler);
+    showFeedback(media, 'A-B Loop', 'Active');
+  }
+
+  // Clear A-B loop
+  function clearABLoop(media) {
+    if (!media) return;
+
+    const state = abLoopState.get(media);
+    if (state) {
+      state.active = false;
+      state.pointA = null;
+      state.pointB = null;
+    }
+
+    if (media._abLoopHandler) {
+      media.removeEventListener('timeupdate', media._abLoopHandler);
+      media._abLoopHandler = null;
+    }
+
+    abLoopState.delete(media);
+    showFeedback(media, 'A-B Loop', 'Cleared');
+    updateControllerLoopDisplay(media);
+    console.log('Video Speed Controller: A-B loop cleared');
+  }
+
+  // Toggle A-B loop on/off (without clearing points)
+  function toggleABLoop(media) {
+    if (!media) return;
+
+    const state = abLoopState.get(media);
+    if (!state || state.pointA === null || state.pointB === null) {
+      showFeedback(media, 'A-B Loop', 'Set A & B first');
+      return;
+    }
+
+    state.active = !state.active;
+
+    if (state.active) {
+      startABLoop(media);
+    } else {
+      showFeedback(media, 'A-B Loop', 'Paused');
+    }
+
+    updateControllerLoopDisplay(media);
+  }
+
+  // Update loop display in controller
+  function updateControllerLoopDisplay(media) {
+    const controller = mediaElements.get(media);
+    if (!controller) return;
+
+    const state = abLoopState.get(media);
+    const loopIndicator = controller.querySelector('.vsc-loop-indicator');
+    const loopBtnA = controller.querySelector('[data-action="set-loop-a"]');
+    const loopBtnB = controller.querySelector('[data-action="set-loop-b"]');
+
+    if (loopIndicator) {
+      if (state && state.active) {
+        loopIndicator.textContent = `${formatTime(state.pointA)} → ${formatTime(state.pointB)}`;
+        loopIndicator.classList.add('active');
+      } else if (state && (state.pointA !== null || state.pointB !== null)) {
+        const aStr = state.pointA !== null ? formatTime(state.pointA) : '--:--';
+        const bStr = state.pointB !== null ? formatTime(state.pointB) : '--:--';
+        loopIndicator.textContent = `${aStr} → ${bStr}`;
+        loopIndicator.classList.remove('active');
+      } else {
+        loopIndicator.textContent = 'Not set';
+        loopIndicator.classList.remove('active');
+      }
+    }
+
+    if (loopBtnA && state?.pointA !== null) {
+      loopBtnA.classList.add('set');
+    } else if (loopBtnA) {
+      loopBtnA.classList.remove('set');
+    }
+
+    if (loopBtnB && state?.pointB !== null) {
+      loopBtnB.classList.add('set');
+    } else if (loopBtnB) {
+      loopBtnB.classList.remove('set');
+    }
+  }
+
+  // Format time as MM:SS
+  function formatTime(seconds) {
+    if (seconds === null || isNaN(seconds)) return '--:--';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // ==========================================
+  // VIDEO FILTERS
+  // ==========================================
+
+  // Apply video filters (brightness, contrast, saturation)
+  function applyVideoFilters(media) {
+    if (!media || media.tagName !== 'VIDEO') return;
+
+    const filterString = `brightness(${videoFilters.brightness}%) contrast(${videoFilters.contrast}%) saturate(${videoFilters.saturation}%)`;
+    media.style.filter = filterString;
+  }
+
+  // Set brightness
+  function setBrightness(media, value) {
+    videoFilters.brightness = Math.max(0, Math.min(200, value));
+    applyVideoFilters(media);
+    updateFilterDisplay(media);
+    saveFiltersIfEnabled();
+  }
+
+  // Set contrast
+  function setContrast(media, value) {
+    videoFilters.contrast = Math.max(0, Math.min(200, value));
+    applyVideoFilters(media);
+    updateFilterDisplay(media);
+    saveFiltersIfEnabled();
+  }
+
+  // Set saturation
+  function setSaturation(media, value) {
+    videoFilters.saturation = Math.max(0, Math.min(200, value));
+    applyVideoFilters(media);
+    updateFilterDisplay(media);
+    saveFiltersIfEnabled();
+  }
+
+  // Reset all filters to defaults
+  function resetFilters(media) {
+    videoFilters.brightness = 100;
+    videoFilters.contrast = 100;
+    videoFilters.saturation = 100;
+    applyVideoFilters(media);
+    updateFilterDisplay(media);
+    showFeedback(media, 'Filters', 'Reset');
+    saveFiltersIfEnabled();
+  }
+
+  // Update filter display in controller
+  function updateFilterDisplay(media) {
+    const controller = mediaElements.get(media);
+    if (!controller) return;
+
+    const brightnessSlider = controller.querySelector('[data-filter="brightness"]');
+    const contrastSlider = controller.querySelector('[data-filter="contrast"]');
+    const saturationSlider = controller.querySelector('[data-filter="saturation"]');
+    const brightnessValue = controller.querySelector('.vsc-brightness-value');
+    const contrastValue = controller.querySelector('.vsc-contrast-value');
+    const saturationValue = controller.querySelector('.vsc-saturation-value');
+
+    if (brightnessSlider) brightnessSlider.value = videoFilters.brightness;
+    if (contrastSlider) contrastSlider.value = videoFilters.contrast;
+    if (saturationSlider) saturationSlider.value = videoFilters.saturation;
+    if (brightnessValue) brightnessValue.textContent = `${videoFilters.brightness}%`;
+    if (contrastValue) contrastValue.textContent = `${videoFilters.contrast}%`;
+    if (saturationValue) saturationValue.textContent = `${videoFilters.saturation}%`;
+  }
+
+  // Save filters if remember is enabled
+  function saveFiltersIfEnabled() {
+    if (contextInvalidated) return;
+    if (settings.rememberFilters) {
+      sendMessage({
+        type: 'saveFilters',
+        hostname: window.location.hostname,
+        filters: videoFilters
+      });
+    }
+  }
+
+  // Load saved filters
+  async function loadSavedFilters() {
+    if (contextInvalidated) return;
+    const response = await sendMessage({
+      type: 'getSavedFilters',
+      hostname: window.location.hostname
+    });
+    if (response.filters) {
+      videoFilters = { ...videoFilters, ...response.filters };
+    }
+  }
+
+  // ==========================================
+  // VOLUME BOOST
+  // ==========================================
+
+  // Initialize volume boost for a media element
+  function initVolumeBoost(media) {
+    if (audioContextMap.has(media)) return audioContextMap.get(media);
+
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const gainNode = audioContext.createGain();
+      const sourceNode = audioContext.createMediaElementSource(media);
+
+      sourceNode.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      const nodes = { audioContext, gainNode, sourceNode };
+      audioContextMap.set(media, nodes);
+
+      return nodes;
+    } catch (e) {
+      console.error('Video Speed Controller: Volume boost init failed', e);
+      return null;
+    }
+  }
+
+  // Set volume boost level (100 = normal, up to 400)
+  function setVolumeBoost(media, level) {
+    volumeBoostLevel = Math.max(100, Math.min(400, level));
+
+    let nodes = audioContextMap.get(media);
+    if (!nodes && level > 100) {
+      nodes = initVolumeBoost(media);
+    }
+
+    if (nodes) {
+      // Resume audio context if suspended
+      if (nodes.audioContext.state === 'suspended') {
+        nodes.audioContext.resume();
+      }
+      // Gain of 1.0 = 100%, 2.0 = 200%, etc.
+      nodes.gainNode.gain.value = volumeBoostLevel / 100;
+    }
+
+    updateVolumeBoostDisplay(media);
+    showFeedback(media, 'Volume', `${volumeBoostLevel}%`);
+    saveVolumeBoostIfEnabled();
+  }
+
+  // Update volume boost display in controller
+  function updateVolumeBoostDisplay(media) {
+    const controller = mediaElements.get(media);
+    if (!controller) return;
+
+    const volumeSlider = controller.querySelector('[data-action="volume-boost"]');
+    const volumeValue = controller.querySelector('.vsc-volume-value');
+
+    if (volumeSlider) volumeSlider.value = volumeBoostLevel;
+    if (volumeValue) {
+      volumeValue.textContent = `${volumeBoostLevel}%`;
+      volumeValue.classList.toggle('boosted', volumeBoostLevel > 100);
+    }
+  }
+
+  // Save volume boost if enabled
+  function saveVolumeBoostIfEnabled() {
+    if (contextInvalidated) return;
+    if (settings.rememberVolumeBoost) {
+      sendMessage({
+        type: 'saveVolumeBoost',
+        hostname: window.location.hostname,
+        level: volumeBoostLevel
+      });
+    }
+  }
+
+  // Load saved volume boost
+  async function loadSavedVolumeBoost() {
+    if (contextInvalidated) return;
+    const response = await sendMessage({
+      type: 'getSavedVolumeBoost',
+      hostname: window.location.hostname
+    });
+    if (response.level) {
+      volumeBoostLevel = response.level;
+    }
+  }
+
+  // ==========================================
+  // SHARED FEEDBACK HELPER
+  // ==========================================
+
+  // Show generic feedback overlay
+  function showFeedback(media, title, value) {
+    const feedback = document.createElement('div');
+    feedback.className = 'vsc-skip-feedback';
+    feedback.innerHTML = `
+      <span class="vsc-skip-message">${title}</span>
+      <span class="vsc-skip-time">${value}</span>
+    `;
+
+    const bgColor = settings.colorBackground || '#1a1a2e';
+    const accentColor = settings.colorAccent || '#e94560';
+    feedback.style.setProperty('--vsc-bg-color', bgColor);
+    feedback.style.setProperty('--vsc-accent-color', accentColor);
+
+    const controller = mediaElements.get(media);
+    if (controller && controller.parentNode) {
+      controller.parentNode.appendChild(feedback);
+    } else {
+      document.body.appendChild(feedback);
+      feedback.style.position = 'fixed';
+      feedback.style.top = '50%';
+      feedback.style.left = '50%';
+      feedback.style.transform = 'translate(-50%, -50%)';
+    }
+
+    requestAnimationFrame(() => {
+      feedback.classList.add('vsc-show');
+    });
+
+    setTimeout(() => {
+      feedback.classList.remove('vsc-show');
+      setTimeout(() => feedback.remove(), 300);
+    }, 1200);
   }
 
   // Pitch correction helpers
@@ -1088,6 +1643,21 @@
           break;
         case 'frame-backward':
           stepFrame(activeElement, false);
+          break;
+        case 'screenshot':
+          captureScreenshot(activeElement);
+          break;
+        case 'set-loop-a':
+          setPointA(activeElement);
+          break;
+        case 'set-loop-b':
+          setPointB(activeElement);
+          break;
+        case 'clear-loop':
+          clearABLoop(activeElement);
+          break;
+        case 'toggle-loop':
+          toggleABLoop(activeElement);
           break;
       }
     }, true);

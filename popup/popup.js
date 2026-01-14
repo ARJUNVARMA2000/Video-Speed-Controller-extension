@@ -13,7 +13,12 @@
     'reset-speed': 'Reset Speed',
     'preferred-speed': 'Preferred Speed',
     'frame-forward': 'Next Frame',
-    'frame-backward': 'Previous Frame'
+    'frame-backward': 'Previous Frame',
+    'screenshot': 'Screenshot',
+    'set-loop-a': 'Set Loop A',
+    'set-loop-b': 'Set Loop B',
+    'clear-loop': 'Clear Loop',
+    'toggle-loop': 'Toggle Loop'
   };
 
   // Value units for display
@@ -88,7 +93,10 @@
     introOutroIntro: document.getElementById('intro-outro-intro'),
     introOutroOutro: document.getElementById('intro-outro-outro'),
     introOutroRuleAdd: document.getElementById('intro-outro-rule-add'),
-    introOutroRulesList: document.getElementById('intro-outro-rules-list')
+    introOutroRulesList: document.getElementById('intro-outro-rules-list'),
+    // New feature settings
+    rememberFilters: document.getElementById('rememberFilters'),
+    rememberVolumeBoost: document.getElementById('rememberVolumeBoost')
   };
 
   // Initialize popup
@@ -96,11 +104,38 @@
     // Load settings
     settings = await chrome.runtime.sendMessage({ type: 'getSettings' });
 
+    await loadActiveSite();
+
     // Apply settings to UI
     applySettingsToUI();
 
     // Set up event listeners
     setupEventListeners();
+  }
+
+  async function loadActiveSite() {
+    currentHostname = null;
+    currentSitePresetSpeed = null;
+
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const url = tabs[0]?.url;
+      if (!url) return;
+
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return;
+
+      currentHostname = parsed.hostname;
+      const response = await chrome.runtime.sendMessage({
+        type: 'getSitePresetSpeed',
+        hostname: currentHostname
+      });
+      if (typeof response.speed === 'number') {
+        currentSitePresetSpeed = response.speed;
+      }
+    } catch (e) {
+      // Ignore invalid URLs (chrome://, about:blank, etc.)
+    }
   }
 
   // Apply settings to UI elements
@@ -110,9 +145,15 @@
     elements.rememberSpeed.checked = settings.rememberSpeed === true;
     elements.forceSpeed.checked = settings.forceSpeed === true;
     elements.workOnAudio.checked = settings.workOnAudio === true;
+    if (elements.preservePitch) {
+      elements.preservePitch.checked = settings.preservePitch !== false;
+    }
     elements.opacity.value = settings.opacity || 0.8;
     elements.opacityValue.textContent = Math.round((settings.opacity || 0.8) * 100) + '%';
     elements.controllerMode.value = settings.controllerMode || 'minimal';
+    if (elements.siteAccessMode) {
+      elements.siteAccessMode.value = settings.siteAccessMode || 'blacklist';
+    }
 
     // Auto-hide delay
     const autoHide = settings.autoHideDelay || 0;
@@ -154,8 +195,24 @@
       elements.skipOutroKey.value = settings.skipOutroKey || 'O';
     }
 
+    // New feature settings
+    if (elements.rememberFilters) {
+      elements.rememberFilters.checked = settings.rememberFilters === true;
+    }
+    if (elements.rememberVolumeBoost) {
+      elements.rememberVolumeBoost.checked = settings.rememberVolumeBoost === true;
+    }
+
+    if (!settings.presets) {
+      settings.presets = [];
+    }
+
     renderShortcuts();
     renderBlacklist();
+    renderWhitelist();
+    renderPresets();
+    updateSitePresetDisplay();
+    updateSiteAccessVisibility();
     renderUrlRules();
     renderIntroOutroRules();
   }
@@ -237,6 +294,83 @@
     `).join('');
   }
 
+  // Render whitelist
+  function renderWhitelist() {
+    if (!elements.whitelistList) return;
+    const whitelist = settings.whitelist || [];
+    elements.whitelistList.innerHTML = whitelist.map((pattern, index) => `
+      <div class="blacklist-item" data-index="${index}">
+        <span>${escapeHtml(pattern)}</span>
+        <button class="blacklist-remove" data-index="${index}">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  // Render presets
+  function renderPresets() {
+    if (!elements.presetList) return;
+    const presets = settings.presets || [];
+
+    elements.presetList.innerHTML = presets.map((preset, index) => {
+      const isDefault = typeof currentSitePresetSpeed === 'number' &&
+        Math.abs(parseFloat(preset.speed) - currentSitePresetSpeed) < 0.001;
+      return `
+        <div class="preset-item ${isDefault ? 'preset-item-default' : ''}" data-index="${index}">
+          <div class="preset-info">
+            <input type="text" class="preset-name" data-field="label" value="${escapeHtml(preset.label || '')}">
+            <input type="number" class="preset-speed" data-field="speed" value="${preset.speed}" step="0.05" min="0.1" max="16">
+          </div>
+          <div class="preset-actions">
+            <button class="preset-apply" data-action="apply">Apply</button>
+            <button class="preset-set-default" data-action="set-default">Set Default</button>
+            <button class="preset-remove" data-action="remove">&times;</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function updateSiteAccessVisibility() {
+    if (!elements.siteAccessMode) return;
+    const mode = settings.siteAccessMode || 'blacklist';
+    if (elements.blacklistContainer) {
+      elements.blacklistContainer.classList.toggle('hidden', mode !== 'blacklist');
+    }
+    if (elements.whitelistContainer) {
+      elements.whitelistContainer.classList.toggle('hidden', mode !== 'whitelist');
+    }
+  }
+
+  function updateSitePresetDisplay() {
+    if (!elements.sitePresetValue) return;
+
+    if (!currentHostname) {
+      elements.sitePresetValue.textContent = 'Unavailable';
+      if (elements.sitePresetClear) {
+        elements.sitePresetClear.disabled = true;
+      }
+      return;
+    }
+
+    if (typeof currentSitePresetSpeed !== 'number') {
+      elements.sitePresetValue.textContent = 'None';
+      if (elements.sitePresetClear) {
+        elements.sitePresetClear.disabled = false;
+      }
+      return;
+    }
+
+    const match = (settings.presets || []).find(
+      preset => Math.abs(parseFloat(preset.speed) - currentSitePresetSpeed) < 0.001
+    );
+    elements.sitePresetValue.textContent = match
+      ? `${match.label} (${currentSitePresetSpeed}x)`
+      : `${currentSitePresetSpeed}x`;
+    if (elements.sitePresetClear) {
+      elements.sitePresetClear.disabled = false;
+    }
+  }
+
   // Render URL rules
   function renderUrlRules() {
     const urlRules = settings.urlRules || [];
@@ -279,7 +413,8 @@
     });
 
     // Simple toggles
-    ['hideByDefault', 'rememberSpeed', 'forceSpeed', 'workOnAudio'].forEach(id => {
+    ['hideByDefault', 'rememberSpeed', 'forceSpeed', 'workOnAudio', 'preservePitch', 'rememberFilters', 'rememberVolumeBoost'].forEach(id => {
+      if (!elements[id]) return;
       elements[id].addEventListener('change', () => {
         settings[id] = elements[id].checked;
         saveSettings();
@@ -307,6 +442,15 @@
       settings.controllerMode = elements.controllerMode.value;
       saveSettings();
     });
+
+    // Site access mode
+    if (elements.siteAccessMode) {
+      elements.siteAccessMode.addEventListener('change', () => {
+        settings.siteAccessMode = elements.siteAccessMode.value;
+        updateSiteAccessVisibility();
+        saveSettings();
+      });
+    }
 
     // Auto-hide delay
     elements.autoHideDelay.addEventListener('input', () => {
@@ -357,6 +501,30 @@
       if (e.key === 'Enter') addBlacklistItem();
     });
     elements.blacklistList.addEventListener('click', handleBlacklistClick);
+
+    // Whitelist
+    if (elements.whitelistAdd && elements.whitelistInput && elements.whitelistList) {
+      elements.whitelistAdd.addEventListener('click', addWhitelistItem);
+      elements.whitelistInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addWhitelistItem();
+      });
+      elements.whitelistList.addEventListener('click', handleWhitelistClick);
+    }
+
+    // Presets
+    if (elements.presetAdd && elements.presetLabel && elements.presetSpeed) {
+      elements.presetAdd.addEventListener('click', addPreset);
+      elements.presetLabel.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addPreset();
+      });
+    }
+    if (elements.presetList) {
+      elements.presetList.addEventListener('click', handlePresetClick);
+      elements.presetList.addEventListener('change', handlePresetChange);
+    }
+    if (elements.sitePresetClear) {
+      elements.sitePresetClear.addEventListener('click', () => setSitePreset(null));
+    }
 
     // URL Rules
     elements.urlRuleAdd.addEventListener('click', addUrlRule);
@@ -628,6 +796,152 @@
     saveSettings();
   }
 
+  // Add whitelist item
+  function addWhitelistItem() {
+    const pattern = elements.whitelistInput.value.trim();
+    if (!pattern) return;
+
+    // Validate regex
+    if (pattern.startsWith('/') || pattern.includes('*')) {
+      try {
+        new RegExp(pattern.replace(/^\/?(.+)\/?$/, '$1'));
+      } catch (e) {
+        showNotification('Invalid regex pattern', 'error');
+        return;
+      }
+    }
+
+    // Check for duplicates
+    if (settings.whitelist?.includes(pattern)) {
+      showNotification('Pattern already exists', 'error');
+      return;
+    }
+
+    settings.whitelist = settings.whitelist || [];
+    settings.whitelist.push(pattern);
+    elements.whitelistInput.value = '';
+    renderWhitelist();
+    saveSettings();
+    showNotification('Site added to allowlist', 'success');
+  }
+
+  // Handle whitelist item click (remove)
+  function handleWhitelistClick(e) {
+    const removeBtn = e.target.closest('.blacklist-remove');
+    if (!removeBtn) return;
+
+    const index = parseInt(removeBtn.dataset.index);
+    settings.whitelist.splice(index, 1);
+    renderWhitelist();
+    saveSettings();
+  }
+
+  // Add preset
+  function addPreset() {
+    const label = elements.presetLabel.value.trim();
+    const speed = parseFloat(elements.presetSpeed.value);
+
+    if (!label) {
+      showNotification('Please enter a preset name', 'error');
+      return;
+    }
+
+    if (isNaN(speed) || speed < 0.1 || speed > 16) {
+      showNotification('Speed must be between 0.1 and 16', 'error');
+      return;
+    }
+
+    settings.presets = settings.presets || [];
+    settings.presets.push({
+      id: `preset_${Date.now().toString(36)}`,
+      label,
+      speed: normalizeSpeed(speed)
+    });
+
+    elements.presetLabel.value = '';
+    renderPresets();
+    saveSettings();
+    showNotification('Preset added', 'success');
+  }
+
+  function handlePresetClick(e) {
+    const item = e.target.closest('.preset-item');
+    if (!item) return;
+    const index = parseInt(item.dataset.index);
+    const preset = settings.presets?.[index];
+    if (!preset) return;
+
+    const action = e.target.dataset.action;
+    if (action === 'apply') {
+      applyPresetSpeed(preset.speed);
+    } else if (action === 'set-default') {
+      setSitePreset(preset.speed);
+    } else if (action === 'remove') {
+      settings.presets.splice(index, 1);
+      renderPresets();
+      updateSitePresetDisplay();
+      saveSettings();
+    }
+  }
+
+  function handlePresetChange(e) {
+    const item = e.target.closest('.preset-item');
+    if (!item) return;
+    const index = parseInt(item.dataset.index);
+    const field = e.target.dataset.field;
+    if (!field || !settings.presets?.[index]) return;
+
+    if (field === 'label') {
+      settings.presets[index].label = e.target.value.trim();
+    } else if (field === 'speed') {
+      const speed = parseFloat(e.target.value);
+      if (isNaN(speed) || speed < 0.1 || speed > 16) {
+        showNotification('Speed must be between 0.1 and 16', 'error');
+        return;
+      }
+      settings.presets[index].speed = normalizeSpeed(speed);
+    }
+
+    renderPresets();
+    updateSitePresetDisplay();
+    saveSettings();
+  }
+
+  async function setSitePreset(speed) {
+    if (!currentHostname) {
+      showNotification('This page does not support site presets', 'error');
+      return;
+    }
+
+    await chrome.runtime.sendMessage({
+      type: 'setSitePresetSpeed',
+      hostname: currentHostname,
+      speed
+    });
+
+    currentSitePresetSpeed = typeof speed === 'number' ? speed : null;
+    updateSitePresetDisplay();
+    renderPresets();
+
+    if (typeof speed === 'number') {
+      applyPresetSpeed(speed);
+      showNotification('Default preset saved for this site', 'success');
+    } else {
+      showNotification('Site default cleared', 'success');
+    }
+  }
+
+  async function applyPresetSpeed(speed) {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'setSpeed', speed });
+    }
+  }
+
+  function normalizeSpeed(speed) {
+    return Math.round(speed * 100) / 100;
+  }
+
   // Add URL rule
   function addUrlRule() {
     const pattern = elements.urlRulePattern.value.trim();
@@ -699,8 +1013,10 @@
         throw new Error('Invalid settings file');
       }
 
-      await chrome.runtime.sendMessage({ type: 'importSettings', settings: data });
-      settings = data;
+      const merged = { ...settings, ...data };
+      await chrome.runtime.sendMessage({ type: 'importSettings', settings: merged });
+      settings = merged;
+      await loadActiveSite();
       applySettingsToUI();
       showNotification('Settings imported', 'success');
     } catch (error) {
@@ -717,6 +1033,7 @@
 
     const response = await chrome.runtime.sendMessage({ type: 'resetSettings' });
     settings = response.settings;
+    await loadActiveSite();
     applySettingsToUI();
     showNotification('Settings reset to defaults', 'success');
   }

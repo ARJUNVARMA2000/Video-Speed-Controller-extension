@@ -5,9 +5,11 @@ A browser extension to control video and audio playback speed with customizable 
 ![Chrome](https://img.shields.io/badge/Chrome-Supported-green?logo=googlechrome)
 ![Firefox](https://img.shields.io/badge/Firefox-Supported-orange?logo=firefox)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
+![Privacy](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen?logo=shield)
 
 ## ✨ Features
 
+- **🔒 100% Privacy Focused** — All data stored locally on your device. No external servers, no tracking, no data collection
 - **Universal Support** — Works on any website with HTML5 video (YouTube, Netflix, Vimeo, etc.)
 - **Keyboard Shortcuts** — Control playback speed without touching your mouse
 - **Two Display Modes** — Minimal badge or full control panel
@@ -143,9 +145,37 @@ Video Speed Controller/
 - The speed controller should appear on the video
 - Use keyboard shortcuts or click the extension icon to access settings
 
-## 🔒 Privacy Policy
+## 🔒 Privacy — Your Data Stays Yours
 
-This extension stores your preferences (playback speed, settings) using your browser's sync storage. If you're signed into your browser account, settings will sync across your devices. No data is collected, transmitted, or shared with any third parties beyond the built-in browser sync.
+**This extension is 100% privacy-focused. We do NOT collect, store, or transmit any of your data to external servers.**
+
+### What This Means For You
+
+| ✅ What We Do | ❌ What We DON'T Do |
+|--------------|-------------------|
+| Store all settings locally in your browser | Send data to any external server |
+| Use Chrome/Firefox built-in sync (optional) | Track your browsing or video watching habits |
+| Keep your preferences on YOUR device | Collect analytics or usage statistics |
+| Work completely offline after installation | Require any account or registration |
+
+### Technical Details
+
+- All data is stored using `chrome.storage.sync` — a secure, browser-native storage API
+- The "sync" feature uses your browser's built-in sync (Google/Firefox account) — **not** our servers
+- The extension only requests minimal permissions: `storage` and `activeTab`
+- **Zero network calls** to external servers — you can verify this in the source code
+- Works entirely offline after installation
+
+### What Gets Stored Locally
+
+- Your playback speed preferences per website
+- Keyboard shortcut configurations
+- Custom presets and URL rules
+- Blacklist/whitelist settings
+- UI preferences (colors, opacity, controller mode)
+- Time saved statistics
+
+**Your data never leaves your browser. Period.**
 
 ## 📄 License
 
