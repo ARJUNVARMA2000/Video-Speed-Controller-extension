@@ -449,7 +449,63 @@
     <button class="btn" id="btn-export">Export</button>
     <button class="btn" id="btn-import">Import</button>
     <button class="btn btn-danger" id="btn-reset">Reset</button>
+    <button class="btn btn-feedback" id="btn-feedback">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      Report Issue
+    </button>
   </footer>
+
+  <!-- Bug Report Modal -->
+  <div class="modal-overlay hidden" id="feedback-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Report an Issue</h2>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Help us improve! Describe the issue you encountered.</p>
+        
+        <div class="feedback-form">
+          <div class="form-group">
+            <label class="form-label">What went wrong?</label>
+            <textarea class="form-textarea" id="feedback-description" placeholder="Describe the issue in detail. What were you trying to do? What happened instead?" rows="4"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">System Information (auto-detected)</label>
+            <div class="system-info" id="system-info">
+              <div class="info-row">
+                <span class="info-label">Extension:</span>
+                <span class="info-value" id="info-version">Loading...</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Browser:</span>
+                <span class="info-value" id="info-browser">Loading...</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Platform:</span>
+                <span class="info-value" id="info-platform">Loading...</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="include-url" checked>
+              <span class="checkbox-text">Include current page URL</span>
+            </label>
+            <span class="info-value url-preview" id="info-url">Loading...</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btn-copy-report">Copy to Clipboard</button>
+        <button class="btn btn-primary" id="btn-send-email">Send via Email</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Hidden file input for import -->
   <input type="file" class="hidden-input" id="import-input" accept=".json">

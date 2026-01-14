@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Video Speed Controller",
   "version": "1.3.0",
-  "description": "Control video and audio playback speed with customizable keyboard shortcuts, screenshot capture, A-B loop, video filters, and volume boost",
+  "description": "Speed up or slow down videos on YouTube, Netflix & any site. Volume boost 400%, screenshots, A-B loop, filters & hotkeys.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

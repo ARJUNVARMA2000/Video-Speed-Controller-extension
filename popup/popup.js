@@ -96,7 +96,19 @@
     introOutroRulesList: document.getElementById('intro-outro-rules-list'),
     // New feature settings
     rememberFilters: document.getElementById('rememberFilters'),
-    rememberVolumeBoost: document.getElementById('rememberVolumeBoost')
+    rememberVolumeBoost: document.getElementById('rememberVolumeBoost'),
+    // Feedback modal elements
+    btnFeedback: document.getElementById('btn-feedback'),
+    feedbackModal: document.getElementById('feedback-modal'),
+    modalClose: document.getElementById('modal-close'),
+    feedbackDescription: document.getElementById('feedback-description'),
+    includeUrl: document.getElementById('include-url'),
+    infoVersion: document.getElementById('info-version'),
+    infoBrowser: document.getElementById('info-browser'),
+    infoPlatform: document.getElementById('info-platform'),
+    infoUrl: document.getElementById('info-url'),
+    btnCopyReport: document.getElementById('btn-copy-report'),
+    btnSendEmail: document.getElementById('btn-send-email')
   };
 
   // Initialize popup
@@ -596,6 +608,30 @@
 
     // Global key listener for recording shortcuts
     document.addEventListener('keydown', handleGlobalKeydown);
+
+    // Feedback modal events
+    if (elements.btnFeedback) {
+      elements.btnFeedback.addEventListener('click', openFeedbackModal);
+    }
+    if (elements.modalClose) {
+      elements.modalClose.addEventListener('click', closeFeedbackModal);
+    }
+    if (elements.feedbackModal) {
+      elements.feedbackModal.addEventListener('click', (e) => {
+        if (e.target === elements.feedbackModal) closeFeedbackModal();
+      });
+    }
+    if (elements.btnCopyReport) {
+      elements.btnCopyReport.addEventListener('click', copyReportToClipboard);
+    }
+    if (elements.btnSendEmail) {
+      elements.btnSendEmail.addEventListener('click', sendReportViaEmail);
+    }
+    if (elements.includeUrl) {
+      elements.includeUrl.addEventListener('change', () => {
+        elements.infoUrl.style.display = elements.includeUrl.checked ? 'block' : 'none';
+      });
+    }
   }
 
   // Track which key input we're recording for
@@ -1061,6 +1097,151 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ========== Feedback/Bug Report Functions ==========
+
+  // Store current page URL for feedback
+  let currentPageUrl = '';
+
+  // Open feedback modal
+  async function openFeedbackModal() {
+    if (!elements.feedbackModal) return;
+
+    // Get system info
+    const manifest = chrome.runtime.getManifest();
+    const browserInfo = getBrowserInfo();
+    
+    // Get current tab URL
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      currentPageUrl = tabs[0]?.url || 'Unknown';
+    } catch (e) {
+      currentPageUrl = 'Unable to retrieve';
+    }
+
+    // Populate system info
+    elements.infoVersion.textContent = `v${manifest.version}`;
+    elements.infoBrowser.textContent = browserInfo.browser;
+    elements.infoPlatform.textContent = browserInfo.platform;
+    elements.infoUrl.textContent = currentPageUrl;
+    elements.infoUrl.style.display = elements.includeUrl.checked ? 'block' : 'none';
+
+    // Clear previous description
+    elements.feedbackDescription.value = '';
+
+    // Show modal
+    elements.feedbackModal.classList.remove('hidden');
+    elements.feedbackDescription.focus();
+  }
+
+  // Close feedback modal
+  function closeFeedbackModal() {
+    if (!elements.feedbackModal) return;
+    elements.feedbackModal.classList.add('hidden');
+  }
+
+  // Get browser info
+  function getBrowserInfo() {
+    const ua = navigator.userAgent;
+    let browser = 'Unknown';
+    let platform = navigator.platform || 'Unknown';
+
+    // Detect browser
+    if (ua.includes('Firefox/')) {
+      const match = ua.match(/Firefox\/(\d+\.\d+)/);
+      browser = `Firefox ${match ? match[1] : ''}`;
+    } else if (ua.includes('Edg/')) {
+      const match = ua.match(/Edg\/(\d+\.\d+)/);
+      browser = `Edge ${match ? match[1] : ''}`;
+    } else if (ua.includes('Chrome/')) {
+      const match = ua.match(/Chrome\/(\d+\.\d+)/);
+      browser = `Chrome ${match ? match[1] : ''}`;
+    } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+      const match = ua.match(/Version\/(\d+\.\d+)/);
+      browser = `Safari ${match ? match[1] : ''}`;
+    }
+
+    // Simplify platform
+    if (platform.includes('Win')) {
+      platform = 'Windows';
+    } else if (platform.includes('Mac')) {
+      platform = 'macOS';
+    } else if (platform.includes('Linux')) {
+      platform = 'Linux';
+    }
+
+    return { browser, platform };
+  }
+
+  // Generate bug report text
+  function generateReport() {
+    const manifest = chrome.runtime.getManifest();
+    const browserInfo = getBrowserInfo();
+    const description = elements.feedbackDescription.value.trim();
+    const includeUrl = elements.includeUrl.checked;
+
+    let report = `=== Video Speed Controller - Bug Report ===\n\n`;
+    report += `DESCRIPTION:\n${description || '(No description provided)'}\n\n`;
+    report += `SYSTEM INFORMATION:\n`;
+    report += `- Extension Version: v${manifest.version}\n`;
+    report += `- Browser: ${browserInfo.browser}\n`;
+    report += `- Platform: ${browserInfo.platform}\n`;
+    
+    if (includeUrl && currentPageUrl) {
+      report += `- Page URL: ${currentPageUrl}\n`;
+    }
+
+    report += `\n--- End of Report ---`;
+    
+    return report;
+  }
+
+  // Copy report to clipboard
+  async function copyReportToClipboard() {
+    const report = generateReport();
+    
+    try {
+      await navigator.clipboard.writeText(report);
+      showNotification('Report copied to clipboard!', 'success');
+      closeFeedbackModal();
+    } catch (e) {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = report;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showNotification('Report copied to clipboard!', 'success');
+      closeFeedbackModal();
+    }
+  }
+
+  // Send report via email
+  function sendReportViaEmail() {
+    const manifest = chrome.runtime.getManifest();
+    const description = elements.feedbackDescription.value.trim();
+    
+    if (!description) {
+      showNotification('Please describe the issue', 'error');
+      elements.feedbackDescription.focus();
+      return;
+    }
+
+    const report = generateReport();
+    const subject = encodeURIComponent(`[Bug Report] Video Speed Controller v${manifest.version}`);
+    const body = encodeURIComponent(report);
+    
+    // Open default email client
+    // Users can change the email address to their own support email
+    const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+    
+    window.open(mailtoLink, '_blank');
+    showNotification('Opening email client...', 'success');
+    closeFeedbackModal();
   }
 
   // Initialize on DOM ready
