@@ -9,6 +9,7 @@ A browser extension to control video and audio playback speed with customizable 
 
 ## ✨ Features
 
+### Core Features
 - **🔒 100% Privacy Focused** — All data stored locally on your device. No external servers, no tracking, no data collection
 - **Universal Support** — Works on any website with HTML5 video (YouTube, Netflix, Vimeo, etc.)
 - **Keyboard Shortcuts** — Control playback speed without touching your mouse
@@ -19,12 +20,48 @@ A browser extension to control video and audio playback speed with customizable 
 - **Mouse Wheel Control** — Scroll on the controller to quickly adjust speed
 - **Right-Click Context Menu** — Quick speed selection via right-click on any video
 - **Long-Press Speed Boost** — Hold `G` to temporarily boost speed, release to restore
+
+### 📸 Screenshot Capture (NEW)
+- **Capture Video Frame** — Save the current video frame as a PNG image
+- **Keyboard Shortcut** — Press `P` to take a screenshot instantly
+- **Auto-Named Files** — Screenshots are automatically named with timestamps
+
+### 🔁 A-B Loop (NEW)
+- **Loop Any Section** — Set point A and point B to loop a specific segment
+- **Visual Indicator** — Shows current loop range in the controller
+- **Toggle On/Off** — Pause and resume the loop without clearing points
+- **Keyboard Shortcuts** — Quick access via `[`, `]`, and `\` keys
+
+### 🎨 Video Filters (NEW)
+- **Brightness Control** — Adjust video brightness (0% - 200%)
+- **Contrast Control** — Adjust video contrast (0% - 200%)
+- **Saturation Control** — Adjust color saturation (0% - 200%)
+- **One-Click Reset** — Quickly reset all filters to defaults
+- **Remember Per Site** — Optionally save filter settings for each website
+
+### 🔊 Volume Boost (NEW)
+- **Amplify Audio** — Boost volume up to 400% beyond the browser's limit
+- **Web Audio API** — Uses native audio processing for clean amplification
+- **Slider Control** — Easy adjustment with visual feedback
+- **Remember Per Site** — Optionally save volume boost for each website
+
+### ⏭️ Intro/Outro Skip (NEW)
+- **Auto-Skip Intros** — Automatically skip to your specified timestamp when videos start
+- **Outro Detection** — Skip outros when videos approach the end
+- **Per-Site Rules** — Set custom intro/outro times for different websites
+- **Keyboard Shortcuts** — Press `I` to skip intro, `O` to skip outro
+- **Visual Feedback** — Shows skip notification with time jumped
+
+### Automation & Rules
 - **URL Speed Rules** — Set automatic speeds for specific URL patterns (e.g., `/shorts` → 1x)
+- **Site Presets** — Set default speeds for specific websites
 - **Auto-Hide Controller** — Controller fades out after configurable delay
 - **Time Saved Tracking** — See how much time you've saved watching at faster speeds
+
+### Customization
 - **Remember Speed** — Saves your preferred speed per website
 - **Cloud Sync** — Settings sync across devices via Chrome/Firefox account
-- **Site Blacklist** — Disable the extension on specific sites
+- **Site Blacklist/Whitelist** — Enable or disable the extension on specific sites
 - **Draggable Controller** — Position the overlay anywhere on the video
 - **Customizable Colors** — Change background and accent colors of the controller
 - **Export/Import Settings** — Backup and restore your configuration
@@ -32,17 +69,36 @@ A browser extension to control video and audio playback speed with customizable 
 
 ## 🎮 Default Keyboard Shortcuts
 
+### Speed Control
 | Key | Action |
 |-----|--------|
 | `V` | Show/Hide controller |
 | `S` | Decrease speed (-0.1x) |
 | `D` | Increase speed (+0.1x) |
 | `R` | Reset to 1.0x |
-| `G` | Jump to preferred speed (3.0x) |
+| `G` | Jump to preferred speed (hold for temporary boost) |
+
+### Navigation
+| Key | Action |
+|-----|--------|
 | `Z` | Rewind 10 seconds |
 | `X` | Fast forward 10 seconds |
 | `,` | Previous frame (pauses video) |
 | `.` | Next frame (pauses video) |
+
+### A-B Loop
+| Key | Action |
+|-----|--------|
+| `[` | Set loop point A (start) |
+| `]` | Set loop point B (end) |
+| `\` | Clear A-B loop |
+
+### Other Features
+| Key | Action |
+|-----|--------|
+| `P` | Capture screenshot |
+| `I` | Skip intro |
+| `O` | Skip outro |
 
 All shortcuts are customizable in the extension popup.
 
@@ -73,12 +129,15 @@ The speed badge appears in the top-right corner of videos, showing the current p
 
 ### Full Mode (Panel)
 A complete control panel with:
-- Speed display
-- Increase/Decrease buttons
+- Speed display with increase/decrease buttons
 - Preset speed buttons (0.5x, 1x, 1.5x, 2x, 3x)
 - Seek controls (-10s, +10s)
 - Frame-by-frame controls (|◀ and ▶|)
 - Pitch correction toggle (ON/OFF)
+- **A-B Loop controls** — Set A, Set B, Clear buttons with time display
+- **Volume Boost slider** — Amplify audio up to 400%
+- **Video Filters** — Brightness, Contrast, Saturation sliders
+- **Screenshot button** — Capture current frame as PNG
 
 ### Picture-in-Picture Mode
 When you enter PiP mode, a floating speed controller appears with:
@@ -93,6 +152,7 @@ Configure all settings through an elegant dark-themed popup interface.
 
 ## ⚙️ Settings
 
+### General Settings
 | Setting | Description |
 |---------|-------------|
 | **Controller Mode** | Choose between minimal badge or full panel |
@@ -100,12 +160,39 @@ Configure all settings through an elegant dark-themed popup interface.
 | **Hide by Default** | Start with controller hidden, press `V` to show |
 | **Auto-Hide Delay** | Automatically hide controller after X seconds |
 | **Badge Colors** | Customize background and accent colors |
+| **PiP Speed Indicator** | Show floating controller in Picture-in-Picture mode |
+
+### Speed Memory
+| Setting | Description |
+|---------|-------------|
 | **Remember Speed** | Save playback speed per website |
 | **Force Saved Speed** | Override player's default speed |
 | **Work on Audio** | Also control `<audio>` elements |
-| **PiP Speed Indicator** | Show floating controller in Picture-in-Picture mode |
 | **URL Speed Rules** | Set automatic speeds for URL patterns |
+
+### Video Filters & Volume
+| Setting | Description |
+|---------|-------------|
+| **Remember Filters** | Save brightness/contrast/saturation per website |
+| **Remember Volume Boost** | Save volume boost level per website |
+
+### Intro/Outro Skip
+| Setting | Description |
+|---------|-------------|
+| **Enable Intro/Outro Skip** | Turn on/off the intro/outro skip feature |
+| **Default Intro Skip** | Seconds to skip at the start of videos |
+| **Default Outro Skip** | Seconds before end to trigger outro skip |
+| **Auto-Skip Intro** | Automatically skip intro when video starts |
+| **Skip Intro Key** | Keyboard shortcut for manual intro skip |
+| **Skip Outro Key** | Keyboard shortcut for manual outro skip |
+| **Site Rules** | Set custom intro/outro times per website |
+
+### Site Access
+| Setting | Description |
+|---------|-------------|
+| **Site Access Mode** | Choose blacklist or whitelist mode |
 | **Site Blacklist** | Disable extension on specific domains |
+| **Site Whitelist** | Only enable extension on specific domains |
 
 ## 🏗️ Project Structure
 
