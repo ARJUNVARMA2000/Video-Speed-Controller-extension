@@ -6,10 +6,14 @@ const DEFAULT_SETTINGS = {
   rememberSpeed: true,
   forceSpeed: false,
   workOnAudio: false,
+  preservePitch: true,
   opacity: 0.8,
   autoHideDelay: 0,
   controllerMode: 'minimal',
   showPipIndicator: true,
+  // Site access control
+  siteAccessMode: 'blacklist', // 'all' | 'blacklist' | 'whitelist'
+  whitelist: [],
   shortcuts: [
     { action: 'show-controller', key: 'V', modifiers: [], enabled: true },
     { action: 'decrease-speed', key: 'S', modifiers: [], value: 0.1, enabled: true },
@@ -23,9 +27,26 @@ const DEFAULT_SETTINGS = {
   ],
   blacklist: [],
   savedSpeeds: {},
+  // Per-site pinned speed (takes priority over savedSpeeds)
+  sitePresetSpeeds: {},
+  // Named presets shown in popup
+  presets: [
+    { id: 'lecture', label: 'Lecture', speed: 1.5 },
+    { id: 'podcast', label: 'Podcast', speed: 1.8 },
+    { id: 'coding', label: 'Coding', speed: 1.25 },
+    { id: 'normal', label: 'Normal', speed: 1.0 }
+  ],
   timeSaved: 0,
   urlRules: [],
-  lastSyncTime: null
+  lastSyncTime: null,
+  // Intro/Outro Skip settings
+  introOutroEnabled: false,
+  defaultIntroSkip: 0,
+  defaultOutroSkip: 0,
+  autoSkipIntro: false,
+  skipIntroKey: 'I',
+  skipOutroKey: 'O',
+  introOutroSiteRules: []
 };
 
 // Initialize default settings on install
@@ -84,21 +105,41 @@ async function handleMessage(message, sender) {
       await chrome.storage.sync.set({ savedSpeeds });
       return { success: true };
 
-    case 'checkBlacklist':
-      const config = await chrome.storage.sync.get(['blacklist', 'enabled']);
-      if (!config.enabled) {
-        return { blocked: true, reason: 'disabled' };
+    case 'setSitePresetSpeed': {
+      const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
+      const sitePresetSpeeds = data.sitePresetSpeeds || {};
+      if (message.speed == null) {
+        delete sitePresetSpeeds[message.hostname];
+      } else {
+        sitePresetSpeeds[message.hostname] = message.speed;
       }
-      const blacklist = config.blacklist || [];
-      const isBlocked = blacklist.some(pattern => {
-        try {
-          const regex = new RegExp(pattern, 'i');
-          return regex.test(message.url);
-        } catch {
-          return message.url.includes(pattern);
-        }
+      await chrome.storage.sync.set({ sitePresetSpeeds });
+      return { success: true };
+    }
+
+    case 'getSitePresetSpeed': {
+      const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
+      const sitePresetSpeeds = data.sitePresetSpeeds || {};
+      return { speed: sitePresetSpeeds[message.hostname] ?? null };
+    }
+
+    case 'setPreservePitch': {
+      const existing = await chrome.storage.sync.get(null);
+      const updated = { ...existing, preservePitch: !!message.preservePitch };
+      await chrome.storage.sync.set({ preservePitch: updated.preservePitch });
+      const tabs = await chrome.tabs.query({});
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings: updated }).catch(() => {});
       });
-      return { blocked: isBlocked, reason: isBlocked ? 'blacklisted' : null };
+      return { success: true };
+    }
+
+    case 'checkBlacklist':
+      // Back-compat alias for checkSiteAccess
+      return await checkSiteAccess(message.url);
+
+    case 'checkSiteAccess':
+      return await checkSiteAccess(message.url);
 
     case 'exportSettings':
       return await chrome.storage.sync.get(null);
@@ -149,9 +190,90 @@ async function handleMessage(message, sender) {
       }
       return { speed: null, matched: false };
 
+    case 'getIntroOutroSettings':
+      const introOutroData = await chrome.storage.sync.get([
+        'introOutroEnabled',
+        'defaultIntroSkip',
+        'defaultOutroSkip',
+        'autoSkipIntro',
+        'skipIntroKey',
+        'skipOutroKey',
+        'introOutroSiteRules'
+      ]);
+
+      // Check if feature is enabled
+      if (!introOutroData.introOutroEnabled) {
+        return { enabled: false };
+      }
+
+      // Find site-specific rule
+      const hostname = message.hostname;
+      const siteRules = introOutroData.introOutroSiteRules || [];
+      const siteRule = siteRules.find(r => 
+        hostname.toLowerCase().includes(r.site.toLowerCase()) ||
+        r.site.toLowerCase().includes(hostname.toLowerCase())
+      );
+
+      if (siteRule) {
+        return {
+          enabled: true,
+          introSkip: siteRule.intro,
+          outroSkip: siteRule.outro,
+          autoSkipIntro: introOutroData.autoSkipIntro || false,
+          skipIntroKey: introOutroData.skipIntroKey || 'I',
+          skipOutroKey: introOutroData.skipOutroKey || 'O',
+          siteSpecific: true
+        };
+      }
+
+      // Return default settings
+      return {
+        enabled: true,
+        introSkip: introOutroData.defaultIntroSkip || 0,
+        outroSkip: introOutroData.defaultOutroSkip || 0,
+        autoSkipIntro: introOutroData.autoSkipIntro || false,
+        skipIntroKey: introOutroData.skipIntroKey || 'I',
+        skipOutroKey: introOutroData.skipOutroKey || 'O',
+        siteSpecific: false
+      };
+
     default:
       return { error: 'Unknown message type' };
   }
+}
+
+function matchPattern(url, pattern) {
+  if (!pattern) return false;
+  try {
+    const regex = new RegExp(pattern, 'i');
+    return regex.test(url);
+  } catch {
+    return url.toLowerCase().includes(String(pattern).toLowerCase());
+  }
+}
+
+async function checkSiteAccess(url) {
+  const config = await chrome.storage.sync.get(['enabled', 'siteAccessMode', 'blacklist', 'whitelist']);
+  if (!config.enabled) {
+    return { blocked: true, reason: 'disabled' };
+  }
+
+  const mode = config.siteAccessMode || 'blacklist';
+  if (mode === 'all') {
+    return { blocked: false, reason: null };
+  }
+
+  const blacklist = config.blacklist || [];
+  const whitelist = config.whitelist || [];
+
+  if (mode === 'whitelist') {
+    const allowed = whitelist.some(p => matchPattern(url, p));
+    return { blocked: !allowed, reason: allowed ? null : 'not_whitelisted' };
+  }
+
+  // blacklist mode (default)
+  const blocked = blacklist.some(p => matchPattern(url, p));
+  return { blocked, reason: blocked ? 'blacklisted' : null };
 }
 
 // Listen for tab updates to inject content script if needed

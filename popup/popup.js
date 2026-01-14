@@ -29,6 +29,8 @@
   // State
   let settings = {};
   let recordingInput = null;
+  let currentHostname = null;
+  let currentSitePresetSpeed = null;
 
   // DOM Elements
   const elements = {
@@ -37,15 +39,22 @@
     rememberSpeed: document.getElementById('rememberSpeed'),
     forceSpeed: document.getElementById('forceSpeed'),
     workOnAudio: document.getElementById('workOnAudio'),
+    preservePitch: document.getElementById('preservePitch'),
     opacity: document.getElementById('opacity'),
     opacityValue: document.getElementById('opacity-value'),
     autoHideDelay: document.getElementById('autoHideDelay'),
     autoHideDelayValue: document.getElementById('autoHideDelay-value'),
     controllerMode: document.getElementById('controllerMode'),
     shortcutsList: document.getElementById('shortcuts-list'),
+    siteAccessMode: document.getElementById('siteAccessMode'),
     blacklistInput: document.getElementById('blacklist-input'),
     blacklistAdd: document.getElementById('blacklist-add'),
     blacklistList: document.getElementById('blacklist-list'),
+    blacklistContainer: document.getElementById('blacklist-container'),
+    whitelistInput: document.getElementById('whitelist-input'),
+    whitelistAdd: document.getElementById('whitelist-add'),
+    whitelistList: document.getElementById('whitelist-list'),
+    whitelistContainer: document.getElementById('whitelist-container'),
     btnExport: document.getElementById('btn-export'),
     btnImport: document.getElementById('btn-import'),
     btnReset: document.getElementById('btn-reset'),
@@ -53,6 +62,12 @@
     notification: document.getElementById('notification'),
     speedPresetsBar: document.querySelector('.speed-presets-bar'),
     timeSaved: document.getElementById('time-saved'),
+    presetLabel: document.getElementById('preset-label'),
+    presetSpeed: document.getElementById('preset-speed'),
+    presetAdd: document.getElementById('preset-add'),
+    presetList: document.getElementById('preset-list'),
+    sitePresetValue: document.getElementById('site-preset-value'),
+    sitePresetClear: document.getElementById('site-preset-clear'),
     urlRulePattern: document.getElementById('url-rule-pattern'),
     urlRuleSpeed: document.getElementById('url-rule-speed'),
     urlRuleAdd: document.getElementById('url-rule-add'),
@@ -61,7 +76,19 @@
     colorAccent: document.getElementById('colorAccent'),
     showPipIndicator: document.getElementById('showPipIndicator'),
     syncStatus: document.getElementById('sync-status'),
-    syncTime: document.getElementById('sync-time')
+    syncTime: document.getElementById('sync-time'),
+    // Intro/Outro Skip elements
+    introOutroEnabled: document.getElementById('introOutroEnabled'),
+    defaultIntroSkip: document.getElementById('defaultIntroSkip'),
+    defaultOutroSkip: document.getElementById('defaultOutroSkip'),
+    autoSkipIntro: document.getElementById('autoSkipIntro'),
+    skipIntroKey: document.getElementById('skipIntroKey'),
+    skipOutroKey: document.getElementById('skipOutroKey'),
+    introOutroSite: document.getElementById('intro-outro-site'),
+    introOutroIntro: document.getElementById('intro-outro-intro'),
+    introOutroOutro: document.getElementById('intro-outro-outro'),
+    introOutroRuleAdd: document.getElementById('intro-outro-rule-add'),
+    introOutroRulesList: document.getElementById('intro-outro-rules-list')
   };
 
   // Initialize popup
@@ -107,9 +134,30 @@
     // Sync status
     updateSyncStatus();
 
+    // Intro/Outro Skip settings
+    if (elements.introOutroEnabled) {
+      elements.introOutroEnabled.checked = settings.introOutroEnabled === true;
+    }
+    if (elements.defaultIntroSkip) {
+      elements.defaultIntroSkip.value = settings.defaultIntroSkip || 0;
+    }
+    if (elements.defaultOutroSkip) {
+      elements.defaultOutroSkip.value = settings.defaultOutroSkip || 0;
+    }
+    if (elements.autoSkipIntro) {
+      elements.autoSkipIntro.checked = settings.autoSkipIntro === true;
+    }
+    if (elements.skipIntroKey) {
+      elements.skipIntroKey.value = settings.skipIntroKey || 'I';
+    }
+    if (elements.skipOutroKey) {
+      elements.skipOutroKey.value = settings.skipOutroKey || 'O';
+    }
+
     renderShortcuts();
     renderBlacklist();
     renderUrlRules();
+    renderIntroOutroRules();
   }
 
   // Update sync status display
@@ -199,6 +247,25 @@
           <span class="url-rule-item-speed">${rule.speed}x</span>
         </div>
         <button class="url-rule-remove" data-index="${index}">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  // Render Intro/Outro site rules
+  function renderIntroOutroRules() {
+    const introOutroSiteRules = settings.introOutroSiteRules || [];
+    if (!elements.introOutroRulesList) return;
+    
+    elements.introOutroRulesList.innerHTML = introOutroSiteRules.map((rule, index) => `
+      <div class="intro-outro-rule-item" data-index="${index}">
+        <div class="intro-outro-rule-info">
+          <span class="intro-outro-rule-site">${escapeHtml(rule.site)}</span>
+          <div class="intro-outro-rule-times">
+            <span class="intro-outro-rule-intro">${rule.intro}s</span>
+            <span class="intro-outro-rule-outro">${rule.outro}s</span>
+          </div>
+        </div>
+        <button class="intro-outro-rule-remove" data-index="${index}">&times;</button>
       </div>
     `).join('');
   }
@@ -304,8 +371,127 @@
     elements.importInput.addEventListener('change', importSettings);
     elements.btnReset.addEventListener('click', resetSettings);
 
+    // Intro/Outro Skip settings
+    if (elements.introOutroEnabled) {
+      elements.introOutroEnabled.addEventListener('change', () => {
+        settings.introOutroEnabled = elements.introOutroEnabled.checked;
+        saveSettings();
+      });
+    }
+
+    if (elements.defaultIntroSkip) {
+      elements.defaultIntroSkip.addEventListener('change', () => {
+        settings.defaultIntroSkip = parseInt(elements.defaultIntroSkip.value) || 0;
+        saveSettings();
+      });
+    }
+
+    if (elements.defaultOutroSkip) {
+      elements.defaultOutroSkip.addEventListener('change', () => {
+        settings.defaultOutroSkip = parseInt(elements.defaultOutroSkip.value) || 0;
+        saveSettings();
+      });
+    }
+
+    if (elements.autoSkipIntro) {
+      elements.autoSkipIntro.addEventListener('change', () => {
+        settings.autoSkipIntro = elements.autoSkipIntro.checked;
+        saveSettings();
+      });
+    }
+
+    // Intro/Outro key inputs (click to record)
+    if (elements.skipIntroKey) {
+      elements.skipIntroKey.addEventListener('click', () => {
+        startKeyRecording(elements.skipIntroKey, 'skipIntroKey');
+      });
+    }
+
+    if (elements.skipOutroKey) {
+      elements.skipOutroKey.addEventListener('click', () => {
+        startKeyRecording(elements.skipOutroKey, 'skipOutroKey');
+      });
+    }
+
+    // Intro/Outro site rules
+    if (elements.introOutroRuleAdd) {
+      elements.introOutroRuleAdd.addEventListener('click', addIntroOutroRule);
+    }
+    if (elements.introOutroSite) {
+      elements.introOutroSite.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addIntroOutroRule();
+      });
+    }
+    if (elements.introOutroRulesList) {
+      elements.introOutroRulesList.addEventListener('click', handleIntroOutroRuleClick);
+    }
+
     // Global key listener for recording shortcuts
     document.addEventListener('keydown', handleGlobalKeydown);
+  }
+
+  // Track which key input we're recording for
+  let recordingKeyInput = null;
+  let recordingKeyField = null;
+
+  // Start recording a key for intro/outro hotkeys
+  function startKeyRecording(input, field) {
+    // Clear any existing recording
+    if (recordingKeyInput) {
+      recordingKeyInput.classList.remove('recording');
+    }
+    if (recordingInput) {
+      recordingInput.classList.remove('recording');
+    }
+
+    recordingKeyInput = input;
+    recordingKeyField = field;
+    input.classList.add('recording');
+    input.value = 'Press key...';
+  }
+
+  // Add intro/outro site rule
+  function addIntroOutroRule() {
+    const site = elements.introOutroSite.value.trim();
+    const intro = parseInt(elements.introOutroIntro.value) || 0;
+    const outro = parseInt(elements.introOutroOutro.value) || 0;
+
+    if (!site) {
+      showNotification('Please enter a site', 'error');
+      return;
+    }
+
+    if (intro === 0 && outro === 0) {
+      showNotification('Please enter intro or outro time', 'error');
+      return;
+    }
+
+    // Check for duplicates
+    settings.introOutroSiteRules = settings.introOutroSiteRules || [];
+    const exists = settings.introOutroSiteRules.some(r => r.site.toLowerCase() === site.toLowerCase());
+    if (exists) {
+      showNotification('Rule for this site already exists', 'error');
+      return;
+    }
+
+    settings.introOutroSiteRules.push({ site, intro, outro });
+    elements.introOutroSite.value = '';
+    elements.introOutroIntro.value = '';
+    elements.introOutroOutro.value = '';
+    renderIntroOutroRules();
+    saveSettings();
+    showNotification('Site rule added', 'success');
+  }
+
+  // Handle intro/outro rule click (remove)
+  function handleIntroOutroRuleClick(e) {
+    const removeBtn = e.target.closest('.intro-outro-rule-remove');
+    if (!removeBtn) return;
+
+    const index = parseInt(removeBtn.dataset.index);
+    settings.introOutroSiteRules.splice(index, 1);
+    renderIntroOutroRules();
+    saveSettings();
   }
 
   // Handle shortcut item click
@@ -324,6 +510,27 @@
 
   // Handle global keydown for recording
   function handleGlobalKeydown(e) {
+    // Handle intro/outro key recording
+    if (recordingKeyInput) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore modifier-only keys
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+      const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+
+      // Update the setting
+      settings[recordingKeyField] = key;
+      recordingKeyInput.classList.remove('recording');
+      recordingKeyInput.value = key;
+      recordingKeyInput = null;
+      recordingKeyField = null;
+      saveSettings();
+      return;
+    }
+
+    // Handle shortcut recording
     if (!recordingInput) return;
 
     e.preventDefault();

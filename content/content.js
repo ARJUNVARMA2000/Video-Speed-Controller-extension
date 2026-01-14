@@ -32,6 +32,11 @@
   // URL tracking for SPAs
   let lastUrl = window.location.href;
 
+  // Intro/Outro skip state
+  let introOutroSettings = null;
+  let introSkippedVideos = new WeakSet(); // Track which videos have had intro skipped
+  let outroSkippedVideos = new WeakSet(); // Track which videos have had outro action triggered
+
   // Check if extension context is still valid
   function isContextValid() {
     try {
@@ -81,7 +86,7 @@
     }
 
     // Check if site is blocked
-    const blockCheck = await sendMessage({ type: 'checkBlacklist', url: window.location.href });
+    const blockCheck = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
     if (blockCheck.blocked) {
       isBlocked = true;
       console.log('Video Speed Controller: Disabled on this site');
@@ -90,10 +95,19 @@
 
     // Load settings
     settings = await sendMessage({ type: 'getSettings' });
+    if (settings.preservePitch === undefined) {
+      settings.preservePitch = true;
+    }
     if (!settings.enabled) {
       isBlocked = true;
       return;
     }
+
+    // Load intro/outro settings
+    introOutroSettings = await sendMessage({
+      type: 'getIntroOutroSettings',
+      hostname: window.location.hostname
+    });
 
     // Find existing media elements
     findMediaElements();
@@ -167,6 +181,8 @@
       case 'settingsUpdated':
         settings = message.settings;
         updateAllControllers();
+        // Reload intro/outro settings
+        reloadIntroOutroSettings();
         break;
       case 'command':
         handleCommand(message.command);
@@ -271,6 +287,9 @@
       return;
     }
 
+    // Apply pitch preference before UI is created
+    applyPreservePitchSetting(media);
+
     const controller = createController(media);
     mediaElements.set(media, controller);
 
@@ -292,6 +311,9 @@
     if (media.tagName === 'VIDEO') {
       setupPipSupport(media);
     }
+
+    // Set up intro/outro skip
+    setupIntroOutroSkip(media);
 
     console.log('Video Speed Controller: Attached to', media.tagName);
   }
@@ -328,7 +350,7 @@
     if (settings.controllerMode === 'minimal') {
       controller.innerHTML = createMinimalUI(media.playbackRate);
     } else {
-      controller.innerHTML = createFullUI(media.playbackRate);
+      controller.innerHTML = createFullUI(media);
     }
 
     // Make controller draggable
@@ -355,7 +377,17 @@
   }
 
   // Create full mode UI (panel with controls)
-  function createFullUI(speed) {
+  function createFullUI(media) {
+    const speed = media.playbackRate;
+    const pitchState = getPitchState(media);
+    const pitchLabel = pitchState.supported ? (pitchState.preserved ? 'ON' : 'OFF') : 'N/A';
+    const pitchClasses = ['vsc-pitch-toggle'];
+    if (pitchState.supported && !pitchState.preserved) pitchClasses.push('vsc-pitch-off');
+    if (!pitchState.supported) pitchClasses.push('vsc-pitch-disabled');
+    const pitchAttrs = pitchState.supported
+      ? 'title="When ON, keeps original pitch. When OFF, pitch changes with speed (chipmunk effect)."'
+      : 'title="Pitch correction not supported for this media." disabled aria-disabled="true"';
+
     return `
       <div class="vsc-panel">
         <div class="vsc-panel-header">
@@ -385,7 +417,7 @@
         </div>
         <div class="vsc-pitch-control">
           <span class="vsc-pitch-label">Pitch Correction</span>
-          <button class="vsc-pitch-toggle" data-action="toggle-pitch" title="When ON, keeps original pitch. When OFF, pitch changes with speed (chipmunk effect).">ON</button>
+          <button class="${pitchClasses.join(' ')}" data-action="toggle-pitch" ${pitchAttrs}>${pitchLabel}</button>
         </div>
       </div>
     `;
@@ -576,15 +608,254 @@
     }, 300);
   }
 
+  // Set up intro/outro skip for a media element
+  function setupIntroOutroSkip(media) {
+    if (!introOutroSettings || !introOutroSettings.enabled) return;
+
+    // Auto-skip intro when video starts playing
+    if (introOutroSettings.autoSkipIntro && introOutroSettings.introSkip > 0) {
+      media.addEventListener('play', () => {
+        // Only skip if we haven't already skipped for this video session
+        // and we're at the beginning of the video
+        if (!introSkippedVideos.has(media) && media.currentTime < 2) {
+          skipIntro(media);
+        }
+      });
+
+      // Also handle loadedmetadata for autoplay videos
+      media.addEventListener('loadedmetadata', () => {
+        if (introOutroSettings.autoSkipIntro && !introSkippedVideos.has(media) && !media.paused && media.currentTime < 2) {
+          skipIntro(media);
+        }
+      });
+    }
+
+    // Set up outro detection using timeupdate
+    if (introOutroSettings.outroSkip > 0) {
+      media.addEventListener('timeupdate', () => {
+        checkOutroSkip(media);
+      });
+    }
+  }
+
+  // Skip intro on a media element
+  function skipIntro(media) {
+    if (!introOutroSettings || !introOutroSettings.enabled) return;
+    if (introOutroSettings.introSkip <= 0) return;
+
+    const skipTo = introOutroSettings.introSkip;
+    
+    // Don't skip if video is shorter than skip time
+    if (media.duration && skipTo >= media.duration) return;
+
+    // Mark as skipped for this video session
+    introSkippedVideos.add(media);
+
+    // Skip to the specified time
+    media.currentTime = skipTo;
+    showSkipFeedback(media, 'Intro Skipped', skipTo);
+    console.log(`Video Speed Controller: Skipped intro to ${skipTo}s`);
+  }
+
+  // Skip to outro (end of video minus outro time)
+  function skipOutro(media) {
+    if (!introOutroSettings || !introOutroSettings.enabled) return;
+    if (introOutroSettings.outroSkip <= 0) return;
+    if (!media.duration || isNaN(media.duration)) return;
+
+    const skipTo = media.duration - 1; // Skip to 1 second before end
+    
+    // Don't skip if we're already past the skip point
+    if (media.currentTime >= skipTo) return;
+
+    // Skip to near the end
+    media.currentTime = skipTo;
+    showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
+    console.log(`Video Speed Controller: Skipped outro to ${skipTo.toFixed(1)}s`);
+  }
+
+  // Check if we should trigger outro skip (for auto-skip)
+  function checkOutroSkip(media) {
+    if (!introOutroSettings || !introOutroSettings.enabled) return;
+    if (introOutroSettings.outroSkip <= 0) return;
+    if (!media.duration || isNaN(media.duration)) return;
+    if (outroSkippedVideos.has(media)) return;
+
+    const timeRemaining = media.duration - media.currentTime;
+    
+    // When we reach the outro skip point, trigger the skip
+    if (timeRemaining <= introOutroSettings.outroSkip && timeRemaining > 0.5) {
+      outroSkippedVideos.add(media);
+      
+      // Option 1: Skip to end (lets browser handle what happens next)
+      media.currentTime = media.duration - 0.5;
+      showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
+      console.log(`Video Speed Controller: Auto-skipped outro at ${introOutroSettings.outroSkip}s remaining`);
+    }
+  }
+
+  // Show visual feedback for skip action
+  function showSkipFeedback(media, message, seconds) {
+    // Create floating feedback element
+    const feedback = document.createElement('div');
+    feedback.className = 'vsc-skip-feedback';
+    feedback.innerHTML = `
+      <span class="vsc-skip-message">${message}</span>
+      <span class="vsc-skip-time">${seconds > 0 ? '+' : ''}${seconds}s</span>
+    `;
+
+    // Apply custom colors
+    const bgColor = settings.colorBackground || '#1a1a2e';
+    const accentColor = settings.colorAccent || '#e94560';
+    feedback.style.setProperty('--vsc-bg-color', bgColor);
+    feedback.style.setProperty('--vsc-accent-color', accentColor);
+
+    // Position near the video
+    const controller = mediaElements.get(media);
+    if (controller && controller.parentNode) {
+      controller.parentNode.appendChild(feedback);
+    } else {
+      document.body.appendChild(feedback);
+      feedback.style.position = 'fixed';
+      feedback.style.top = '50%';
+      feedback.style.left = '50%';
+      feedback.style.transform = 'translate(-50%, -50%)';
+    }
+
+    // Animate and remove
+    requestAnimationFrame(() => {
+      feedback.classList.add('vsc-show');
+    });
+
+    setTimeout(() => {
+      feedback.classList.remove('vsc-show');
+      setTimeout(() => feedback.remove(), 300);
+    }, 1500);
+  }
+
+  // Manual skip intro (triggered by hotkey)
+  function manualSkipIntro() {
+    if (!activeElement) {
+      activeElement = findActiveMedia();
+    }
+    if (!activeElement) return;
+
+    // Reset the skipped flag to allow manual skip even if auto-skipped
+    introSkippedVideos.delete(activeElement);
+    skipIntro(activeElement);
+  }
+
+  // Manual skip outro (triggered by hotkey)
+  function manualSkipOutro() {
+    if (!activeElement) {
+      activeElement = findActiveMedia();
+    }
+    if (!activeElement) return;
+
+    // Reset the skipped flag to allow manual skip
+    outroSkippedVideos.delete(activeElement);
+    skipOutro(activeElement);
+  }
+
+  // Reset intro/outro skip state for a video (e.g., when URL changes)
+  function resetIntroOutroState(media) {
+    introSkippedVideos.delete(media);
+    outroSkippedVideos.delete(media);
+  }
+
+  // Reload intro/outro settings (called when settings change)
+  async function reloadIntroOutroSettings() {
+    if (contextInvalidated) return;
+    
+    introOutroSettings = await sendMessage({
+      type: 'getIntroOutroSettings',
+      hostname: window.location.hostname
+    });
+    
+    console.log('Video Speed Controller: Intro/Outro settings reloaded', introOutroSettings);
+  }
+
+  // Pitch correction helpers
+  function isPitchSupported(media) {
+    return ('preservesPitch' in media) || ('mozPreservesPitch' in media) || ('webkitPreservesPitch' in media);
+  }
+
+  function getPreservePitchValue(media) {
+    if ('preservesPitch' in media) return media.preservesPitch !== false;
+    if ('mozPreservesPitch' in media) return media.mozPreservesPitch !== false;
+    if ('webkitPreservesPitch' in media) return media.webkitPreservesPitch !== false;
+    return null;
+  }
+
+  function setPreservePitchValue(media, value) {
+    if ('preservesPitch' in media) media.preservesPitch = value;
+    if ('mozPreservesPitch' in media) media.mozPreservesPitch = value;
+    if ('webkitPreservesPitch' in media) media.webkitPreservesPitch = value;
+  }
+
+  function getPitchState(media) {
+    const supported = isPitchSupported(media);
+    return {
+      supported,
+      preserved: supported ? getPreservePitchValue(media) !== false : false
+    };
+  }
+
+  function applyPreservePitchSetting(media) {
+    if (!isPitchSupported(media)) return;
+    const preserve = settings?.preservePitch !== false;
+    setPreservePitchValue(media, preserve);
+  }
+
+  function updatePitchToggle(media) {
+    const controller = mediaElements.get(media);
+    if (!controller) return;
+    const button = controller.querySelector('.vsc-pitch-toggle');
+    if (!button) return;
+
+    const supported = isPitchSupported(media);
+    if (!supported) {
+      button.textContent = 'N/A';
+      button.classList.add('vsc-pitch-disabled');
+      button.classList.remove('vsc-pitch-off');
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.title = 'Pitch correction not supported for this media.';
+      return;
+    }
+
+    const preserved = getPreservePitchValue(media) !== false;
+    button.disabled = false;
+    button.removeAttribute('aria-disabled');
+    button.classList.remove('vsc-pitch-disabled');
+    button.textContent = preserved ? 'ON' : 'OFF';
+    button.classList.toggle('vsc-pitch-off', !preserved);
+    button.title = 'When ON, keeps original pitch. When OFF, pitch changes with speed (chipmunk effect).';
+  }
+
   // Toggle pitch correction (preservesPitch)
   function togglePitchCorrection(media, button) {
-    // preservesPitch: true = pitch stays same (corrected), false = chipmunk effect
-    const currentlyPreserved = media.preservesPitch !== false;
-    media.preservesPitch = !currentlyPreserved;
+    if (!isPitchSupported(media)) {
+      updatePitchToggle(media);
+      return;
+    }
 
-    // Update button text
-    button.textContent = media.preservesPitch ? 'ON' : 'OFF';
-    button.classList.toggle('vsc-pitch-off', !media.preservesPitch);
+    const currentlyPreserved = getPreservePitchValue(media) !== false;
+    const newValue = !currentlyPreserved;
+    settings.preservePitch = newValue;
+    setPreservePitchValue(media, newValue);
+
+    // Apply to all media elements to keep behavior consistent
+    mediaElements.forEach((_controller, mediaEl) => {
+      applyPreservePitchSetting(mediaEl);
+      updatePitchToggle(mediaEl);
+    });
+
+    sendMessage({ type: 'setPreservePitch', preservePitch: newValue });
+
+    if (button) {
+      updatePitchToggle(media);
+    }
   }
 
   // Briefly highlight controller to show feedback
@@ -621,6 +892,8 @@
     presets.forEach(preset => {
       preset.classList.toggle('active', parseFloat(preset.dataset.speed) === speed);
     });
+
+    updatePitchToggle(media);
   }
 
   // Update all controllers (after settings change)
@@ -640,16 +913,20 @@
         controller.classList.remove('vsc-hidden');
       }
 
+      applyPreservePitchSetting(media);
+
       // Rebuild UI if mode changed
       const isMinimal = controller.querySelector('.vsc-badge') !== null;
       if ((settings.controllerMode === 'minimal') !== isMinimal) {
         if (settings.controllerMode === 'minimal') {
           controller.innerHTML = createMinimalUI(media.playbackRate);
         } else {
-          controller.innerHTML = createFullUI(media.playbackRate);
+          controller.innerHTML = createFullUI(media);
         }
         attachControllerEvents(controller, media);
       }
+
+      updatePitchToggle(media);
     });
   }
 
@@ -678,6 +955,20 @@
         media.playbackRate = urlRuleResponse.speed;
         updateControllerDisplay(media);
         console.log(`Video Speed Controller: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
+      }, 100);
+      return;
+    }
+
+    // Check per-site preset speed next
+    const sitePresetResponse = await sendMessage({
+      type: 'getSitePresetSpeed',
+      hostname: window.location.hostname
+    });
+
+    if (sitePresetResponse.speed) {
+      setTimeout(() => {
+        media.playbackRate = sitePresetResponse.speed;
+        updateControllerDisplay(media);
       }, 100);
       return;
     }
@@ -718,6 +1009,25 @@
       // Ignore if typing in input fields
       if (e.target.matches('input, textarea, [contenteditable="true"]')) {
         return;
+      }
+
+      // Check for intro/outro skip hotkeys first
+      if (introOutroSettings && introOutroSettings.enabled) {
+        const key = e.key.toUpperCase();
+        
+        if (key === (introOutroSettings.skipIntroKey || 'I').toUpperCase()) {
+          e.preventDefault();
+          e.stopPropagation();
+          manualSkipIntro();
+          return;
+        }
+        
+        if (key === (introOutroSettings.skipOutroKey || 'O').toUpperCase()) {
+          e.preventDefault();
+          e.stopPropagation();
+          manualSkipOutro();
+          return;
+        }
       }
 
       // Find matching shortcut
@@ -1025,9 +1335,16 @@
         lastUrl = currentUrl;
         console.log('Video Speed Controller: URL changed, checking rules');
 
-        // Re-apply speed for new URL
+        // Reload intro/outro settings for new URL
+        introOutroSettings = await sendMessage({
+          type: 'getIntroOutroSettings',
+          hostname: window.location.hostname
+        });
+
+        // Re-apply speed and reset intro/outro state for new URL
         for (const [media] of mediaElements) {
           await applyInitialSpeed(media);
+          resetIntroOutroState(media);
         }
       }
     }, 500);
@@ -1038,8 +1355,16 @@
       if (contextInvalidated) return;
 
       lastUrl = window.location.href;
+
+      // Reload intro/outro settings
+      introOutroSettings = await sendMessage({
+        type: 'getIntroOutroSettings',
+        hostname: window.location.hostname
+      });
+
       for (const [media] of mediaElements) {
         await applyInitialSpeed(media);
+        resetIntroOutroState(media);
       }
     });
   }

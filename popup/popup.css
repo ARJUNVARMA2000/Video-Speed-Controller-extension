@@ -824,3 +824,220 @@ body {
 .sync-status.synced .sync-time {
   color: var(--success);
 }
+
+/* Number Input */
+.number-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.number-input {
+  width: 60px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.number-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.number-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Intro/Outro Key Input */
+.intro-outro-key {
+  width: 50px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.intro-outro-key:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.intro-outro-key.recording {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  animation: pulse 1s infinite;
+}
+
+/* Intro/Outro Site Rules */
+.intro-outro-site-rules {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.subsection-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.intro-outro-rule-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.intro-outro-site-input {
+  flex: 2;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.intro-outro-site-input::placeholder {
+  color: var(--text-muted);
+}
+
+.intro-outro-site-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.intro-outro-time-input {
+  width: 55px;
+  padding: 8px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.intro-outro-time-input::placeholder {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.intro-outro-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.intro-outro-rule-add {
+  padding: 0 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.intro-outro-rule-add:hover {
+  background: var(--accent-hover);
+}
+
+.intro-outro-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.intro-outro-rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.intro-outro-rule-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.intro-outro-rule-site {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.intro-outro-rule-times {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.intro-outro-rule-intro,
+.intro-outro-rule-outro {
+  padding: 2px 6px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.intro-outro-rule-intro::before {
+  content: '▶ ';
+  color: var(--success);
+  font-size: 8px;
+}
+
+.intro-outro-rule-outro::before {
+  content: '⏭ ';
+  color: var(--warning);
+  font-size: 8px;
+}
+
+.intro-outro-rule-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.intro-outro-rule-remove:hover {
+  background: var(--danger);
+  color: var(--text-primary);
+}
