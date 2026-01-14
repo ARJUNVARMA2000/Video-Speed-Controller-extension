@@ -153,7 +153,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   switch (message.type) {
-    case 'getSettings':
+    case 'getSettings': {
       const [syncSettings, localSettings] = await Promise.all([
         chrome.storage.sync.get(null),
         chrome.storage.local.get(['timeSaved'])
@@ -161,8 +161,9 @@ async function handleMessage(message, sender) {
       const timeSaved = typeof localSettings.timeSaved === 'number' ? localSettings.timeSaved : 0;
       timeSavedCache = timeSaved;
       return { ...syncSettings, timeSaved };
+    }
 
-    case 'saveSettings':
+    case 'saveSettings': {
       const { timeSaved, ...syncSettings } = message.settings || {};
       await chrome.storage.sync.set(syncSettings);
       // Notify all tabs about settings update
@@ -171,21 +172,24 @@ async function handleMessage(message, sender) {
         chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings: message.settings }).catch(() => {});
       });
       return { success: true };
+    }
 
-    case 'getSavedSpeed':
+    case 'getSavedSpeed': {
       const settings = await chrome.storage.sync.get(['savedSpeeds', 'rememberSpeed']);
       if (settings.rememberSpeed && settings.savedSpeeds) {
         return { speed: settings.savedSpeeds[message.hostname] || null };
       }
       return { speed: null };
+    }
 
-    case 'saveSpeed':
+    case 'saveSpeed': {
       const current = await chrome.storage.sync.get(['savedSpeeds']);
       const savedSpeeds = current.savedSpeeds || {};
       savedSpeeds[message.hostname] = message.speed;
       // Use batched write for frequent speed saves
       batchedStorageSet({ savedSpeeds });
       return { success: true };
+    }
 
     case 'setSitePresetSpeed': {
       const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
@@ -223,7 +227,7 @@ async function handleMessage(message, sender) {
     case 'checkSiteAccess':
       return await checkSiteAccess(message.url);
 
-    case 'exportSettings':
+    case 'exportSettings': {
       const [exportSync, exportLocal] = await Promise.all([
         chrome.storage.sync.get(null),
         chrome.storage.local.get(['timeSaved'])
@@ -232,8 +236,9 @@ async function handleMessage(message, sender) {
         ...exportSync,
         timeSaved: typeof exportLocal.timeSaved === 'number' ? exportLocal.timeSaved : 0
       };
+    }
 
-    case 'importSettings':
+    case 'importSettings': {
       const { timeSaved: importedTimeSaved, ...importSync } = message.settings || {};
       await chrome.storage.sync.set(importSync);
       if (typeof importedTimeSaved === 'number') {
@@ -241,31 +246,36 @@ async function handleMessage(message, sender) {
         timeSavedCache = importedTimeSaved;
       }
       return { success: true };
+    }
 
-    case 'resetSettings':
+    case 'resetSettings': {
       await chrome.storage.sync.clear();
       await chrome.storage.sync.set(DEFAULT_SETTINGS);
       await chrome.storage.local.set({ timeSaved: 0 });
       timeSavedCache = 0;
       return { success: true, settings: DEFAULT_SETTINGS };
+    }
 
-    case 'addTimeSaved':
+    case 'addTimeSaved': {
       const currentTimeSaved = await getTimeSavedValue();
       const newTimeSaved = currentTimeSaved + message.seconds;
       // Use batched local write for frequent time tracking updates
       setTimeSavedValue(newTimeSaved);
       return { success: true, timeSaved: newTimeSaved };
+    }
 
-    case 'updateSyncTime':
+    case 'updateSyncTime': {
       const syncTime = Date.now();
       await chrome.storage.sync.set({ lastSyncTime: syncTime });
       return { success: true, lastSyncTime: syncTime };
+    }
 
-    case 'getSyncStatus':
+    case 'getSyncStatus': {
       const syncData = await chrome.storage.sync.get(['lastSyncTime']);
       return { lastSyncTime: syncData.lastSyncTime || null };
+    }
 
-    case 'getUrlRuleSpeed':
+    case 'getUrlRuleSpeed': {
       const ruleSettings = await chrome.storage.sync.get(['urlRules']);
       const urlRules = ruleSettings.urlRules || [];
       const url = message.url;
@@ -286,8 +296,9 @@ async function handleMessage(message, sender) {
         }
       }
       return { speed: null, matched: false };
+    }
 
-    case 'getIntroOutroSettings':
+    case 'getIntroOutroSettings': {
       const introOutroData = await chrome.storage.sync.get([
         'introOutroEnabled',
         'defaultIntroSkip',
@@ -333,6 +344,7 @@ async function handleMessage(message, sender) {
         skipOutroKey: introOutroData.skipOutroKey || 'O',
         siteSpecific: false
       };
+    }
 
     // Video Filters
     case 'saveFilters': {
@@ -387,7 +399,10 @@ function matchPattern(url, pattern) {
 
 async function checkSiteAccess(url) {
   const config = await chrome.storage.sync.get(['enabled', 'siteAccessMode', 'blacklist', 'whitelist']);
-  if (!config.enabled) {
+  
+  // If 'enabled' is undefined (settings not initialized), treat as enabled
+  // This handles fresh installs or cases where onInstalled didn't complete
+  if (config.enabled === false) {
     return { blocked: true, reason: 'disabled' };
   }
 
@@ -400,6 +415,10 @@ async function checkSiteAccess(url) {
   const whitelist = config.whitelist || [];
 
   if (mode === 'whitelist') {
+    // If whitelist is empty, don't block (avoids accidentally blocking everything)
+    if (whitelist.length === 0) {
+      return { blocked: false, reason: null };
+    }
     const allowed = whitelist.some(p => matchPattern(url, p));
     return { blocked: !allowed, reason: allowed ? null : 'not_whitelisted' };
   }

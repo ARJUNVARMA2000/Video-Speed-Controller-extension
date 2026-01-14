@@ -101,6 +101,8 @@
 
   // Initialize
   async function init() {
+    console.log('Video Speed Pro: Starting initialization...');
+    
     // Check if extension context is valid
     if (!isContextValid()) {
       console.log('Video Speed Pro: Extension context not available');
@@ -109,19 +111,37 @@
 
     // Check if site is blocked
     const blockCheck = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
-    if (blockCheck.blocked) {
+    if (blockCheck && blockCheck.blocked) {
       isBlocked = true;
-      console.log('Video Speed Pro: Disabled on this site');
+      console.log('Video Speed Pro: Disabled on this site -', blockCheck.reason || 'unknown reason');
       return;
     }
 
     // Load settings
     settings = await sendMessage({ type: 'getSettings' });
+    
+    // If settings failed to load (empty response), use defaults
+    if (!settings || Object.keys(settings).length === 0) {
+      console.warn('Video Speed Pro: Failed to load settings, using defaults');
+      settings = {
+        enabled: true,
+        hideByDefault: false,
+        rememberSpeed: true,
+        workOnAudio: false,
+        preservePitch: true,
+        opacity: 0.8,
+        autoHideDelay: 0,
+        controllerMode: 'minimal',
+        shortcuts: []
+      };
+    }
+    
     if (settings.preservePitch === undefined) {
       settings.preservePitch = true;
     }
-    if (!settings.enabled) {
+    if (settings.enabled === false) {  // Explicitly check for false, not falsy
       isBlocked = true;
+      console.log('Video Speed Pro: Extension is disabled in settings');
       return;
     }
 
@@ -254,16 +274,43 @@
     }
   }
 
-  // Find all media elements on page
+  // Find all media elements on page (including shadow DOM)
   function findMediaElements() {
     const selector = settings.workOnAudio ? 'video, audio' : 'video';
+    
+    // Find in main document
     const elements = document.querySelectorAll(selector);
+    console.log(`Video Speed Pro: Found ${elements.length} media element(s) in main document`);
     elements.forEach(el => attachController(el));
+    
+    // Also search in shadow DOMs
+    findMediaInShadowRoots(document.body);
+  }
+
+  // Recursively search for media in shadow DOMs
+  function findMediaInShadowRoots(root) {
+    if (!root) return;
+    
+    const selector = settings.workOnAudio ? 'video, audio' : 'video';
+    
+    // Check all elements for shadow roots
+    const allElements = root.querySelectorAll('*');
+    allElements.forEach(el => {
+      if (el.shadowRoot) {
+        const shadowMedia = el.shadowRoot.querySelectorAll(selector);
+        if (shadowMedia.length > 0) {
+          console.log(`Video Speed Pro: Found ${shadowMedia.length} media element(s) in shadow DOM`);
+          shadowMedia.forEach(media => attachController(media));
+        }
+        // Recursively search nested shadow DOMs
+        findMediaInShadowRoots(el.shadowRoot);
+      }
+    });
   }
 
   // Set up mutation observer for dynamic content
   function setupObserver() {
-    const observer = new MutationObserver((mutations) => {
+    const observerCallback = (mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
@@ -294,12 +341,33 @@
           }
         }
       }
-    });
+    };
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    const observer = new MutationObserver(observerCallback);
+
+    // Observe document.body if available, otherwise wait for it
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      console.log('Video Speed Pro: MutationObserver started');
+    } else {
+      // Wait for body to be available
+      const bodyObserver = new MutationObserver(() => {
+        if (document.body) {
+          bodyObserver.disconnect();
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+          console.log('Video Speed Pro: MutationObserver started (delayed)');
+          // Also search for any videos that appeared before observer was set up
+          findMediaElements();
+        }
+      });
+      bodyObserver.observe(document.documentElement, { childList: true });
+    }
   }
 
   // Check if element is a media element
@@ -313,15 +381,60 @@
   function attachController(media) {
     if (mediaElements.has(media)) return;
 
-    // Skip tiny videos (likely ads or tracking pixels)
-    if (media.tagName === 'VIDEO' && media.offsetWidth < 100 && media.offsetHeight < 100) {
+    // Skip if media is not connected to the DOM
+    if (!media.isConnected) {
+      console.log('Video Speed Pro: Skipping disconnected media element');
       return;
+    }
+
+    // Skip tiny videos (likely ads or tracking pixels)
+    // But only if the video has actually loaded and we know its size
+    if (media.tagName === 'VIDEO') {
+      const width = media.offsetWidth || media.clientWidth || media.videoWidth;
+      const height = media.offsetHeight || media.clientHeight || media.videoHeight;
+      
+      // Only skip if video is loaded (has dimensions) AND is tiny
+      if (width > 0 && height > 0 && width < 100 && height < 100) {
+        console.log('Video Speed Pro: Skipping tiny video', width, 'x', height);
+        return;
+      }
+      
+      // If video has zero dimensions, it might not be loaded yet
+      // Wait for loadedmetadata event to try again
+      if (width === 0 && height === 0 && !media._vscWaitingForLoad) {
+        media._vscWaitingForLoad = true;
+        console.log('Video Speed Pro: Video has no dimensions, waiting for load...');
+        media.addEventListener('loadedmetadata', () => {
+          media._vscWaitingForLoad = false;
+          attachController(media);
+        }, { once: true });
+        // Also try after a short delay in case loadedmetadata already fired
+        setTimeout(() => {
+          if (!mediaElements.has(media)) {
+            media._vscWaitingForLoad = false;
+            attachController(media);
+          }
+        }, 500);
+        return;
+      }
     }
 
     // Apply pitch preference before UI is created
     applyPreservePitchSetting(media);
 
-    const controller = createController(media);
+    let controller;
+    try {
+      controller = createController(media);
+    } catch (e) {
+      console.error('Video Speed Pro: Failed to create controller', e);
+      return;
+    }
+    
+    if (!controller) {
+      console.warn('Video Speed Pro: Controller creation returned null');
+      return;
+    }
+    
     mediaElements.set(media, controller);
 
     // Set initial speed if remembered
@@ -355,6 +468,11 @@
     if (volumeBoostLevel > 100) {
       applyVolumeBoostToMedia(media);
       updateVolumeBoostDisplay(media);
+    }
+
+    // Initialize auto-hide timer if enabled and controller is visible
+    if (settings.autoHideDelay > 0 && !settings.hideByDefault) {
+      resetAutoHide(controller);
     }
 
     console.log('Video Speed Pro: Attached to', media.tagName);
@@ -529,26 +647,40 @@
 
   // Position controller relative to video
   function positionController(media, controller) {
-    // Try to position within video's parent
-    let container = media.parentElement;
-
-    // Find a suitable positioned parent
-    while (container && container !== document.body) {
-      const style = window.getComputedStyle(container);
-      if (style.position !== 'static') break;
-      container = container.parentElement;
+    // If media has no parent (not in DOM), we can't position the controller
+    if (!media.parentElement) {
+      console.warn('Video Speed Pro: Media element has no parent, cannot attach controller');
+      return;
     }
 
-    if (!container || container === document.body) {
-      // Wrap video in positioned container
-      const wrapper = document.createElement('div');
-      wrapper.className = 'vsc-wrapper';
-      wrapper.style.cssText = 'position: relative; display: inline-block; width: 100%; height: 100%;';
+    // Check if we already have a wrapper for this video
+    if (media.parentElement.classList.contains('vsc-wrapper')) {
+      media.parentElement.appendChild(controller);
+      console.log('Video Speed Pro: Controller attached to existing wrapper');
+      return;
+    }
+
+    // Always wrap video in a positioned container so controller positions correctly
+    // This ensures the controller appears relative to the video, not some distant parent
+    const wrapper = document.createElement('div');
+    wrapper.className = 'vsc-wrapper';
+    
+    // Copy important layout styles from video to wrapper
+    const mediaStyle = window.getComputedStyle(media);
+    const display = mediaStyle.display;
+    
+    // Use inline-block for inline videos, block for block videos
+    const wrapperDisplay = (display === 'inline' || display === 'inline-block') ? 'inline-block' : 'block';
+    wrapper.style.cssText = `position: relative; display: ${wrapperDisplay}; width: fit-content; max-width: 100%;`;
+    
+    // Check if parent still exists before modifying DOM
+    if (media.parentElement) {
       media.parentElement.insertBefore(wrapper, media);
       wrapper.appendChild(media);
       wrapper.appendChild(controller);
+      console.log('Video Speed Pro: Controller wrapped and attached');
     } else {
-      container.appendChild(controller);
+      console.warn('Video Speed Pro: Media parent disappeared during positioning');
     }
   }
 
@@ -1518,8 +1650,18 @@
 
       if (settings.hideByDefault) {
         controller.classList.add('vsc-hidden');
+        // Clear any existing auto-hide timer when hidden by default
+        const existingTimer = autoHideTimers.get(controller);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+          autoHideTimers.delete(controller);
+        }
       } else {
         controller.classList.remove('vsc-hidden');
+        // Restart auto-hide timer if enabled
+        if (settings.autoHideDelay > 0) {
+          resetAutoHide(controller);
+        }
       }
 
       applyPreservePitchSetting(media);
