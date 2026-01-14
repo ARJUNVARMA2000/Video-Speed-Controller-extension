@@ -5,6 +5,12 @@ let pendingWrites = {};
 let writeTimer = null;
 const WRITE_BATCH_DELAY = 300; // ms
 
+let pendingLocalWrites = {};
+let localWriteTimer = null;
+const LOCAL_WRITE_BATCH_DELAY = 500; // ms
+
+let timeSavedCache = null;
+
 function batchedStorageSet(updates) {
   Object.assign(pendingWrites, updates);
   clearTimeout(writeTimer);
@@ -14,6 +20,31 @@ function batchedStorageSet(updates) {
       pendingWrites = {};
     }
   }, WRITE_BATCH_DELAY);
+}
+
+function batchedLocalSet(updates) {
+  Object.assign(pendingLocalWrites, updates);
+  clearTimeout(localWriteTimer);
+  localWriteTimer = setTimeout(async () => {
+    if (Object.keys(pendingLocalWrites).length > 0) {
+      await chrome.storage.local.set(pendingLocalWrites);
+      pendingLocalWrites = {};
+    }
+  }, LOCAL_WRITE_BATCH_DELAY);
+}
+
+async function getTimeSavedValue() {
+  if (timeSavedCache === null) {
+    const data = await chrome.storage.local.get(['timeSaved']);
+    timeSavedCache = typeof data.timeSaved === 'number' ? data.timeSaved : 0;
+  }
+  return timeSavedCache;
+}
+
+function setTimeSavedValue(value) {
+  timeSavedCache = value;
+  batchedLocalSet({ timeSaved: value });
+  return value;
 }
 
 // Immediate write for critical settings (bypass batching)
@@ -62,14 +93,6 @@ const DEFAULT_SETTINGS = {
   savedSpeeds: {},
   // Per-site pinned speed (takes priority over savedSpeeds)
   sitePresetSpeeds: {},
-  // Named presets shown in popup
-  presets: [
-    { id: 'lecture', label: 'Lecture', speed: 1.5 },
-    { id: 'podcast', label: 'Podcast', speed: 1.8 },
-    { id: 'coding', label: 'Coding', speed: 1.25 },
-    { id: 'normal', label: 'Normal', speed: 1.0 }
-  ],
-  timeSaved: 0,
   urlRules: [],
   lastSyncTime: null,
   // Intro/Outro Skip settings
@@ -92,12 +115,24 @@ const DEFAULT_SETTINGS = {
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     await chrome.storage.sync.set(DEFAULT_SETTINGS);
+    await chrome.storage.local.set({ timeSaved: 0 });
+    timeSavedCache = 0;
     console.log('Video Speed Controller: Default settings initialized');
   } else if (details.reason === 'update') {
     // Merge new default settings with existing ones
     const existing = await chrome.storage.sync.get(null);
+    const existingTimeSaved = typeof existing.timeSaved === 'number' ? existing.timeSaved : null;
     const merged = { ...DEFAULT_SETTINGS, ...existing };
+    delete merged.timeSaved;
     await chrome.storage.sync.set(merged);
+    await chrome.storage.sync.remove('timeSaved');
+    if (existingTimeSaved !== null) {
+      await chrome.storage.local.set({ timeSaved: existingTimeSaved });
+      timeSavedCache = existingTimeSaved;
+    } else {
+      await chrome.storage.local.set({ timeSaved: 0 });
+      timeSavedCache = 0;
+    }
     console.log('Video Speed Controller: Settings migrated');
   }
 });
@@ -119,10 +154,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleMessage(message, sender) {
   switch (message.type) {
     case 'getSettings':
-      return await chrome.storage.sync.get(null);
+      const [syncSettings, localSettings] = await Promise.all([
+        chrome.storage.sync.get(null),
+        chrome.storage.local.get(['timeSaved'])
+      ]);
+      const timeSaved = typeof localSettings.timeSaved === 'number' ? localSettings.timeSaved : 0;
+      timeSavedCache = timeSaved;
+      return { ...syncSettings, timeSaved };
 
     case 'saveSettings':
-      await chrome.storage.sync.set(message.settings);
+      const { timeSaved, ...syncSettings } = message.settings || {};
+      await chrome.storage.sync.set(syncSettings);
       // Notify all tabs about settings update
       const tabs = await chrome.tabs.query({});
       tabs.forEach(tab => {
@@ -182,22 +224,36 @@ async function handleMessage(message, sender) {
       return await checkSiteAccess(message.url);
 
     case 'exportSettings':
-      return await chrome.storage.sync.get(null);
+      const [exportSync, exportLocal] = await Promise.all([
+        chrome.storage.sync.get(null),
+        chrome.storage.local.get(['timeSaved'])
+      ]);
+      return {
+        ...exportSync,
+        timeSaved: typeof exportLocal.timeSaved === 'number' ? exportLocal.timeSaved : 0
+      };
 
     case 'importSettings':
-      await chrome.storage.sync.set(message.settings);
+      const { timeSaved: importedTimeSaved, ...importSync } = message.settings || {};
+      await chrome.storage.sync.set(importSync);
+      if (typeof importedTimeSaved === 'number') {
+        await chrome.storage.local.set({ timeSaved: importedTimeSaved });
+        timeSavedCache = importedTimeSaved;
+      }
       return { success: true };
 
     case 'resetSettings':
       await chrome.storage.sync.clear();
       await chrome.storage.sync.set(DEFAULT_SETTINGS);
+      await chrome.storage.local.set({ timeSaved: 0 });
+      timeSavedCache = 0;
       return { success: true, settings: DEFAULT_SETTINGS };
 
     case 'addTimeSaved':
-      const timeData = await chrome.storage.sync.get(['timeSaved']);
-      const newTimeSaved = (timeData.timeSaved || 0) + message.seconds;
-      // Use batched write for frequent time tracking updates
-      batchedStorageSet({ timeSaved: newTimeSaved });
+      const currentTimeSaved = await getTimeSavedValue();
+      const newTimeSaved = currentTimeSaved + message.seconds;
+      // Use batched local write for frequent time tracking updates
+      setTimeSavedValue(newTimeSaved);
       return { success: true, timeSaved: newTimeSaved };
 
     case 'updateSyncTime':

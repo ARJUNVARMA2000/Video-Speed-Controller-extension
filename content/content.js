@@ -51,6 +51,10 @@
   let audioContextMap = new Map(); // Map<media, { audioContext, gainNode, sourceNode }>
   let volumeBoostLevel = 100; // 100 = normal, up to 400
 
+  // Drag state (shared global handlers)
+  let dragState = null;
+  let dragListenersBound = false;
+
   // Check if extension context is still valid
   function isContextValid() {
     try {
@@ -85,6 +89,10 @@
       }
     });
     mediaElements.clear();
+    audioContextMap.forEach((_nodes, media) => {
+      cleanupVolumeBoostForMedia(media);
+    });
+    audioContextMap.clear();
 
     // Reset state
     activeElement = null;
@@ -345,7 +353,8 @@
 
     // Apply volume boost if saved
     if (volumeBoostLevel > 100) {
-      setVolumeBoost(media, volumeBoostLevel);
+      applyVolumeBoostToMedia(media);
+      updateVolumeBoostDisplay(media);
     }
 
     console.log('Video Speed Controller: Attached to', media.tagName);
@@ -361,6 +370,7 @@
     if (activeElement === media) {
       activeElement = null;
     }
+    cleanupVolumeBoostForMedia(media);
   }
 
   // Create controller UI
@@ -543,41 +553,48 @@
   }
 
   // Make element draggable
-  function makeDraggable(element) {
-    let isDragging = false;
-    let startX, startY, initialX, initialY;
+  function ensureGlobalDragListeners() {
+    if (dragListenersBound) return;
+    dragListenersBound = true;
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
+  }
 
+  function handleDragMove(e) {
+    if (!dragState) return;
+
+    const { element, startX, startY, initialX, initialY } = dragState;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+
+    element.style.position = 'fixed';
+    element.style.left = (initialX + deltaX) + 'px';
+    element.style.top = (initialY + deltaY) + 'px';
+  }
+
+  function handleDragEnd() {
+    if (!dragState) return;
+    dragState.element.style.cursor = 'grab';
+    dragState = null;
+  }
+
+  function makeDraggable(element) {
+    element.style.cursor = 'grab';
     element.addEventListener('mousedown', (e) => {
       if (e.target.tagName === 'BUTTON') return;
-
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
+      ensureGlobalDragListeners();
 
       const rect = element.getBoundingClientRect();
-      initialX = rect.left;
-      initialY = rect.top;
+      dragState = {
+        element,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialX: rect.left,
+        initialY: rect.top
+      };
 
       element.style.cursor = 'grabbing';
       e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-
-      const deltaX = e.clientX - startX;
-      const deltaY = e.clientY - startY;
-
-      element.style.position = 'fixed';
-      element.style.left = (initialX + deltaX) + 'px';
-      element.style.top = (initialY + deltaY) + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        element.style.cursor = 'grab';
-      }
     });
   }
 
@@ -1018,6 +1035,9 @@
     };
 
     // Remove existing handler if any
+    if (media._abLoopHandler) {
+      media.removeEventListener('timeupdate', media._abLoopHandler);
+    }
     media._abLoopHandler = handler;
     media.addEventListener('timeupdate', handler);
     showFeedback(media, 'A-B Loop', 'Active');
@@ -1229,12 +1249,11 @@
     }
   }
 
-  // Set volume boost level (100 = normal, up to 400)
-  function setVolumeBoost(media, level) {
-    volumeBoostLevel = Math.max(100, Math.min(400, level));
+  function applyVolumeBoostToMedia(media) {
+    if (!media) return;
 
     let nodes = audioContextMap.get(media);
-    if (!nodes && level > 100) {
+    if (!nodes && volumeBoostLevel > 100) {
       nodes = initVolumeBoost(media);
     }
 
@@ -1246,9 +1265,44 @@
       // Gain of 1.0 = 100%, 2.0 = 200%, etc.
       nodes.gainNode.gain.value = volumeBoostLevel / 100;
     }
+  }
 
-    updateVolumeBoostDisplay(media);
-    showFeedback(media, 'Volume', `${volumeBoostLevel}%`);
+  function cleanupVolumeBoostForMedia(media) {
+    const nodes = audioContextMap.get(media);
+    if (!nodes) return;
+
+    try {
+      nodes.sourceNode.disconnect();
+    } catch {}
+    try {
+      nodes.gainNode.disconnect();
+    } catch {}
+    try {
+      if (nodes.audioContext.state !== 'closed') {
+        nodes.audioContext.close();
+      }
+    } catch {}
+
+    audioContextMap.delete(media);
+  }
+
+  function updateAllVolumeBoostDisplays() {
+    mediaElements.forEach((_controller, mediaEl) => updateVolumeBoostDisplay(mediaEl));
+  }
+
+  // Set volume boost level (100 = normal, up to 400)
+  function setVolumeBoost(media, level, options = {}) {
+    volumeBoostLevel = Math.max(100, Math.min(400, level));
+    const { showFeedback: shouldShowFeedback = true } = options;
+
+    mediaElements.forEach((_controller, mediaEl) => {
+      applyVolumeBoostToMedia(mediaEl);
+    });
+
+    updateAllVolumeBoostDisplays();
+    if (shouldShowFeedback) {
+      showFeedback(media, 'Volume', `${volumeBoostLevel}%`);
+    }
     saveVolumeBoostIfEnabled();
   }
 
@@ -1286,8 +1340,8 @@
       type: 'getSavedVolumeBoost',
       hostname: window.location.hostname
     });
-    if (response.level) {
-      volumeBoostLevel = response.level;
+    if (typeof response.level === 'number') {
+      volumeBoostLevel = Math.max(100, Math.min(400, response.level));
     }
   }
 
@@ -1885,13 +1939,16 @@
         accumulator = 0;
 
         // Find playing media at >1x speed
+        let totalTimeSaved = 0;
         for (const [media] of mediaElements) {
           if (!media.paused && media.playbackRate > 1) {
             // Time saved = actual time * (speed - 1)
             // e.g., 10 seconds at 2x saves 10 * (2-1) = 10 seconds
-            const timeSaved = elapsed * (media.playbackRate - 1);
-            updateTimeSaved(timeSaved);
+            totalTimeSaved += elapsed * (media.playbackRate - 1);
           }
+        }
+        if (totalTimeSaved > 0) {
+          updateTimeSaved(totalTimeSaved);
         }
       }
 
