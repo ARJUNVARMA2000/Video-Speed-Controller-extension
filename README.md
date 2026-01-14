@@ -67,7 +67,7 @@ All shortcuts are customizable in the extension popup.
 ## 🖼️ Screenshots
 
 ### Minimal Mode (Badge)
-The speed badge appears in the top-right corner of videos, showing the current playback rate.
+The speed badge appears in the top-right corner of videos, showing the current playback rate. Hover over the badge to reveal +/- buttons for quick speed adjustment.
 
 ### Full Mode (Panel)
 A complete control panel with:
@@ -163,11 +163,13 @@ Contributions are welcome! Feel free to:
 ### v1.2.0
 - Added frame-by-frame navigation (`,` and `.` keys)
 - Added Picture-in-Picture speed control with floating indicator
+- Added hover-to-reveal +/- buttons in minimal badge mode
 - Added cloud sync status indicator
 - Added URL speed rules for automatic speed per URL pattern
 - Added customizable badge colors (background & accent)
 - Added PiP indicator toggle setting
 - Improved sync across devices visualization
+- Improved click handling to prevent video play/pause interference
 
 ### v1.1.0
 - Added pitch correction toggle (ON/OFF for chipmunk effect)
