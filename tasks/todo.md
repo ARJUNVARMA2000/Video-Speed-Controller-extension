@@ -663,3 +663,24 @@ cleanup, and extension-context invalidation. `npm run package` runs the full gat
 later or in a cross-origin player can be detected; Chrome's isolated-world cost cannot be removed
 without losing that feature. Closed shadow roots, canvas players, and protected media remain the
 same browser/platform limits documented for v1.6. Firefox remains out of scope.
+
+---
+
+# v1.7 Chrome Web Store privacy audit
+
+- [x] Compare the live Privacy practices declarations with the packaged manifest and runtime.
+- [x] Make the public privacy policy explicit about Chrome's local-processing disclosure categories
+      and Limited Use requirements.
+- [x] Correct the live single-purpose, permission, and data-usage declarations and save the draft.
+- [x] Verify the saved draft and record the final declarations below without submitting for review.
+
+## Review
+
+The live Chrome Web Store draft now describes the single purpose as local HTML5 media playback
+control; accurately explains `storage`, `activeTab`, and the all-URLs content detector; declares no
+remote code; and discloses local handling of web history, user activity, and website content. The
+three Limited Use certifications remain selected and the GitHub Pages privacy-policy URL remains
+valid. The dashboard confirmed **Item saved**; the update was not submitted for review or published.
+
+The public policy now names the same three disclosure categories, explains exactly which local data
+falls into each, and explicitly states Chrome Web Store User Data Policy and Limited Use compliance.

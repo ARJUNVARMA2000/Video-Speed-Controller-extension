@@ -12,6 +12,13 @@ The extension reads the current page URL and HTML media-element state in memory 
 site/URL rules, choose the active player, change playback speed, and calculate remaining time. It
 does not store a browsing history or a list of watched videos.
 
+For Chrome Web Store disclosure purposes, this local processing can include **web history** (the
+current URL and hostnames attached to user-created site preferences), **user activity** (media
+playback state and the aggregate time-saved calculation), and **website content** (HTML media
+metadata, user-requested screenshot pixels, and the audio amplitude described below). These data
+are used only to provide the extension's user-facing media controls. They are not sent to the
+developer or to third parties.
+
 If silence skipping is enabled, the browser's Web Audio API calculates short-lived amplitude
 samples in memory. Audio is not recorded, retained, uploaded, or exposed outside the page's local
 extension context. Unsupported, protected, or clearly cross-origin media is not analysed.
@@ -52,6 +59,10 @@ requests to those services.
 
 The development-only locale generator is not part of the packaged extension and is not executed
 in users' browsers.
+
+The extension's use of user data complies with the Chrome Web Store User Data Policy, including
+its Limited Use requirements. User data is used only to provide or improve the extension's single
+purpose and is not used for advertising, creditworthiness, lending, or unrelated purposes.
 
 ## Deletion
 
