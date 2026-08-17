@@ -14,6 +14,8 @@
   const MAX_LIST_ITEMS = 100;
   const VOLUME_BOOST_MAX = 600;
   const MAX_PATTERN_LENGTH = 512;
+  const DEFAULT_SPEED_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  const MODIFIER_ORDER = ['Control', 'Alt', 'Shift', 'Meta'];
   const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
   const DEFAULT_SHORTCUTS = [
@@ -63,7 +65,13 @@
     rememberFilters: false,
     savedFilters: {},
     rememberVolumeBoost: false,
-    savedVolumeBoost: {}
+    savedVolumeBoost: {},
+    speedStep: 0.1,
+    speedPresets: DEFAULT_SPEED_PRESETS,
+    silenceSkipEnabled: false,
+    silenceThreshold: 0.02,
+    silenceMinDuration: 1,
+    silenceSkipSpeed: 4
   };
 
   const BOOLEAN_KEYS = [
@@ -77,7 +85,8 @@
     'introOutroEnabled',
     'autoSkipIntro',
     'rememberFilters',
-    'rememberVolumeBoost'
+    'rememberVolumeBoost',
+    'silenceSkipEnabled'
   ];
 
   function clone(value) {
@@ -114,6 +123,16 @@
     return [...new Set(value.map(sanitizePattern).filter(Boolean))].slice(0, MAX_LIST_ITEMS);
   }
 
+  function sanitizeSpeedPresets(value) {
+    if (!Array.isArray(value)) return clone(DEFAULT_SPEED_PRESETS);
+    const presets = [...new Set(value
+      .filter(item => Number.isFinite(Number(item)))
+      .map(item => normalizeSpeed(item)))]
+      .slice(0, 12)
+      .sort((a, b) => a - b);
+    return presets.length > 0 ? presets : clone(DEFAULT_SPEED_PRESETS);
+  }
+
   function sanitizeShortcuts(value) {
     if (!Array.isArray(value)) return clone(DEFAULT_SHORTCUTS);
 
@@ -130,7 +149,7 @@
         action: candidate.action,
         key: sanitizeKey(candidate.key, fallback.key),
         modifiers: Array.isArray(candidate.modifiers)
-          ? candidate.modifiers.filter(modifier => ['Alt', 'Control', 'Meta', 'Shift'].includes(modifier))
+          ? MODIFIER_ORDER.filter(modifier => candidate.modifiers.includes(modifier))
           : [],
         enabled: candidate.enabled !== false
       };
@@ -229,6 +248,10 @@
     if (has('autoHideDelay')) result.autoHideDelay = Math.round(clampNumber(source.autoHideDelay, 0, 10, 0));
     if (has('defaultIntroSkip')) result.defaultIntroSkip = Math.round(clampNumber(source.defaultIntroSkip, 0, 300, 0));
     if (has('defaultOutroSkip')) result.defaultOutroSkip = Math.round(clampNumber(source.defaultOutroSkip, 0, 300, 0));
+    if (has('speedStep')) result.speedStep = Math.round(clampNumber(source.speedStep, 0.05, 2, DEFAULT_SETTINGS.speedStep) * 100) / 100;
+    if (has('silenceThreshold')) result.silenceThreshold = Math.round(clampNumber(source.silenceThreshold, 0.001, 0.2, DEFAULT_SETTINGS.silenceThreshold) * 1000) / 1000;
+    if (has('silenceMinDuration')) result.silenceMinDuration = Math.round(clampNumber(source.silenceMinDuration, 0.2, 10, DEFAULT_SETTINGS.silenceMinDuration) * 10) / 10;
+    if (has('silenceSkipSpeed')) result.silenceSkipSpeed = normalizeSpeed(clampNumber(source.silenceSkipSpeed, 1.5, SPEED_MAX, DEFAULT_SETTINGS.silenceSkipSpeed));
 
     if (has('controllerMode')) {
       result.controllerMode = ['minimal', 'full'].includes(source.controllerMode)
@@ -248,6 +271,7 @@
     if (has('blacklist')) result.blacklist = sanitizePatternList(source.blacklist);
     if (has('whitelist')) result.whitelist = sanitizePatternList(source.whitelist);
     if (has('shortcuts')) result.shortcuts = sanitizeShortcuts(source.shortcuts);
+    if (has('speedPresets')) result.speedPresets = sanitizeSpeedPresets(source.speedPresets);
     if (has('savedSpeeds')) result.savedSpeeds = sanitizeSpeedMap(source.savedSpeeds);
     if (has('sitePresetSpeeds')) result.sitePresetSpeeds = sanitizeSpeedMap(source.sitePresetSpeeds);
     if (has('urlRules')) result.urlRules = sanitizeUrlRules(source.urlRules);
@@ -353,6 +377,7 @@
     SPEED_MIN,
     SPEED_MAX,
     VOLUME_BOOST_MAX,
+    DEFAULT_SPEED_PRESETS,
     checkSiteAccess,
     createDefaultSettings,
     diffSettings,

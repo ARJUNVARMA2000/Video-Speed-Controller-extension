@@ -116,7 +116,8 @@ test('message handler merges concurrent collection writes without dropping entri
   ]);
 
   assert.deepEqual(responses.map(response => response.success), [true, true]);
-  assert.deepEqual(harness.sync.data.savedSpeeds, {
+  const persisted = await harness.send({ type: 'getSettings' });
+  assert.deepEqual(persisted.savedSpeeds, {
     'existing.example': 1.5,
     'one.example': 2,
     'two.example': 3
@@ -129,7 +130,8 @@ test('targeted settings updates preserve independently changing collections', as
 
   assert.equal(response.success, true);
   assert.equal(harness.sync.data.enabled, false);
-  assert.deepEqual(harness.sync.data.savedSpeeds, { 'example.com': 2 });
+  const persisted = await harness.send({ type: 'getSettings' });
+  assert.deepEqual(persisted.savedSpeeds, { 'example.com': 2 });
   assert.equal(harness.sync.data.unknown, undefined);
   assert.equal(typeof harness.sync.data.lastSyncTime, 'number');
 });
@@ -151,7 +153,7 @@ test('import normalizes unsafe values and keeps time saved in local storage', as
   assert.equal(response.success, true);
   assert.equal(harness.sync.data.opacity, 1);
   assert.equal(harness.sync.data.controllerMode, 'minimal');
-  assert.deepEqual(harness.sync.data.savedSpeeds, { 'example.com': 16 });
+  assert.deepEqual(response.settings.savedSpeeds, { 'example.com': 16 });
   assert.equal(harness.sync.data.unknown, undefined);
   assert.equal(harness.local.data.timeSaved, 0);
 });
@@ -163,6 +165,35 @@ test('extension update preserves an existing local time-saved counter', async ()
   assert.equal(harness.local.data.timeSaved, 1234);
   assert.equal(harness.sync.data.enabled, true);
   assert.equal(harness.sync.data.timeSaved, undefined);
+});
+
+test('legacy collection items migrate into bounded sync chunks', async () => {
+  const harness = createHarness({
+    enabled: true,
+    savedSpeeds: { 'one.example': 1.5, 'two.example': 2 }
+  });
+  await harness.install({ reason: 'update' });
+
+  const settings = await harness.send({ type: 'getSettings' });
+  assert.deepEqual(settings.savedSpeeds, { 'one.example': 1.5, 'two.example': 2 });
+  assert.equal(harness.sync.data.savedSpeeds, undefined);
+  assert.ok(harness.sync.data.__vscCollectionIndex.savedSpeeds.count > 0);
+});
+
+test('over-budget imports fail with a useful Chrome Sync error', async () => {
+  const patterns = Array.from({ length: 100 }, (_, index) => `${index}-${'x'.repeat(500)}`);
+  const response = await createHarness().send({
+    type: 'importSettings',
+    settings: {
+      blacklist: patterns,
+      whitelist: patterns.map(pattern => `allow-${pattern}`),
+      urlRules: patterns.map(pattern => ({ pattern, speed: 2 })),
+      introOutroSiteRules: patterns.map(site => ({ site, intro: 10, outro: 10 }))
+    }
+  });
+
+  assert.equal(response.success, false);
+  assert.match(response.error, /Sync budget|too large|quota/i);
 });
 
 test('commands go to the playing frame instead of every frame in the tab', async () => {
@@ -209,13 +240,13 @@ test('frames that lose their media stop receiving commands', async () => {
   await harness.runCommand('increase-speed');
   assert.equal(harness.sentMessages.at(-1).frameId, 5);
 
-  // Media removed: the registry empties and dispatch falls back to a tab-wide send.
+  // Media removed: the registry empties and dispatch falls back to the top frame only.
   await harness.report(4, 5, { hasMedia: false, playing: false, area: 0, isTop: false });
   await harness.runCommand('increase-speed');
-  assert.equal(harness.sentMessages.at(-1).frameId, null);
+  assert.equal(harness.sentMessages.at(-1).frameId, 0);
 });
 
-test('a dead frame falls back to a tab-wide send instead of dropping the command', async () => {
+test('a dead frame retries the next ranked frame without broadcasting', async () => {
   const harness = createHarness();
   harness.setActiveTabs([{ id: 9 }]);
   harness.setFrameResponder((tabId, message, frameId) => {
@@ -224,14 +255,16 @@ test('a dead frame falls back to a tab-wide send instead of dropping the command
   });
 
   await harness.report(9, 6, { hasMedia: true, playing: true, area: 640 * 360, isTop: false });
+  await harness.report(9, 2, { hasMedia: true, playing: false, area: 1280 * 720, isTop: false });
   await harness.runCommand('decrease-speed');
 
-  assert.deepEqual(harness.sentMessages.map(entry => entry.frameId), [6, null]);
+  assert.deepEqual(harness.sentMessages.map(entry => entry.frameId), [6, 2]);
 
-  // The dead frame is forgotten, so the next command does not retry it.
+  // The dead frame is forgotten, so the next command goes directly to frame 2.
   await harness.runCommand('decrease-speed');
-  assert.equal(harness.sentMessages.at(-1).frameId, null);
+  assert.equal(harness.sentMessages.at(-1).frameId, 2);
   assert.equal(harness.sentMessages.length, 3);
+  assert.equal(harness.sentMessages.some(entry => entry.frameId === null), false);
 });
 
 test('navigation and tab close clear the frame registry', async () => {
@@ -242,12 +275,12 @@ test('navigation and tab close clear the frame registry', async () => {
   await harness.report(2, 4, { hasMedia: true, playing: true, area: 640 * 360, isTop: false });
   harness.updateTab(2, { status: 'loading' });
   await harness.runCommand('reset-speed');
-  assert.equal(harness.sentMessages.at(-1).frameId, null);
+  assert.equal(harness.sentMessages.at(-1).frameId, 0);
 
   await harness.report(2, 4, { hasMedia: true, playing: true, area: 640 * 360, isTop: false });
   harness.removeTab(2);
   await harness.runCommand('reset-speed');
-  assert.equal(harness.sentMessages.at(-1).frameId, null);
+  assert.equal(harness.sentMessages.at(-1).frameId, 0);
 });
 
 test('popup relay reaches the elected frame and rejects unsupported message types', async () => {

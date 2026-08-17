@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Speed Controller Pro</title>
+  <link rel="stylesheet" href="compact.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../icons/icon48.png" alt="">
+      <div>
+        <h1 data-i18n="ui_speed_controller">Speed Controller</h1>
+        <p id="site-name" data-i18n="ui_checking">Checking…</p>
+      </div>
+    </div>
+    <label class="switch" aria-label="Enable Video Speed Controller">
+      <input id="enabled" type="checkbox">
+      <span></span>
+    </label>
+  </header>
+
+  <main>
+    <section class="now-playing" aria-live="polite">
+      <button id="play-pause" class="round" type="button" aria-label="Play or pause" disabled>▶</button>
+      <div class="speed-readout">
+        <strong id="current-speed">—</strong>
+        <span id="remaining-time" data-i18n="ui_no_active_media">No active media</span>
+      </div>
+      <div class="stepper">
+        <button id="decrease" type="button" aria-label="Decrease speed" disabled>−</button>
+        <button id="increase" type="button" aria-label="Increase speed" disabled>+</button>
+      </div>
+    </section>
+
+    <section>
+      <div id="presets" class="presets" aria-label="Set playback speed"></div>
+      <p id="status" class="status" data-i18n="ui_open_video_page">Open a page with an HTML5 video.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span><span data-i18n="ui_time_saved">Time Saved</span>: <strong id="time-saved">0s</strong></span>
+    <button id="open-options" type="button" data-i18n="ui_advanced_settings">Advanced settings</button>
+  </footer>
+
+  <script src="../shared/settings.js"></script>
+  <script src="compact.js"></script>
+</body>
+</html>

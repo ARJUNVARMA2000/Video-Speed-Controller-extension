@@ -15,13 +15,174 @@ const COLLECTION_WRITE_DELAY = 300;
 let pendingCollectionWrites = new Map();
 let collectionWriteTimer = null;
 let collectionWriteQueue = Promise.resolve();
+let syncWriteQueue = Promise.resolve();
 let timeSavedWriteQueue = Promise.resolve();
 let timeSavedCache = null;
+
+const SYNC_COLLECTIONS = new Set([
+  'blacklist',
+  'whitelist',
+  'savedSpeeds',
+  'sitePresetSpeeds',
+  'urlRules',
+  'introOutroSiteRules',
+  'savedFilters',
+  'savedVolumeBoost'
+]);
+const ARRAY_COLLECTIONS = new Set(['blacklist', 'whitelist', 'urlRules', 'introOutroSiteRules']);
+const COLLECTION_INDEX_KEY = '__vscCollectionIndex';
+const COLLECTION_CHUNK_PREFIX = '__vscChunk:';
+const SYNC_ITEM_BUDGET_BYTES = 7600;
+const SYNC_TOTAL_BUDGET_BYTES = 95000;
+
+function utf8ByteLength(value) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  let bytes = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length) {
+      bytes += 4;
+      index += 1;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+function collectionChunkKey(collection, index) {
+  return `${COLLECTION_CHUNK_PREFIX}${collection}:${index}`;
+}
+
+function splitCollection(collection, value) {
+  const isArray = ARRAY_COLLECTIONS.has(collection);
+  const entries = isArray ? [...(Array.isArray(value) ? value : [])] : Object.entries(value || {});
+  const chunks = [];
+  let chunk = isArray ? [] : {};
+
+  for (const entry of entries) {
+    const candidate = isArray ? [...chunk, entry] : { ...chunk, [entry[0]]: entry[1] };
+    if (utf8ByteLength(candidate) > SYNC_ITEM_BUDGET_BYTES) {
+      if ((isArray ? chunk.length : Object.keys(chunk).length) === 0) {
+        throw new Error(`${collection} contains an entry too large to sync`);
+      }
+      chunks.push(chunk);
+      chunk = isArray ? [entry] : { [entry[0]]: entry[1] };
+      if (utf8ByteLength(chunk) > SYNC_ITEM_BUDGET_BYTES) {
+        throw new Error(`${collection} contains an entry too large to sync`);
+      }
+    } else {
+      chunk = candidate;
+    }
+  }
+
+  if ((isArray ? chunk.length : Object.keys(chunk).length) > 0) chunks.push(chunk);
+  return { type: isArray ? 'array' : 'object', chunks };
+}
+
+function decodeSyncSnapshot(raw) {
+  const result = {};
+  for (const [key, value] of Object.entries(raw || {})) {
+    if (key === COLLECTION_INDEX_KEY || key.startsWith(COLLECTION_CHUNK_PREFIX)) continue;
+    result[key] = value;
+  }
+
+  const index = raw?.[COLLECTION_INDEX_KEY] || {};
+  for (const collection of SYNC_COLLECTIONS) {
+    const metadata = index[collection];
+    if (!metadata) continue;
+    const chunks = [];
+    for (let chunkIndex = 0; chunkIndex < metadata.count; chunkIndex += 1) {
+      const chunk = raw[collectionChunkKey(collection, chunkIndex)];
+      if (chunk !== undefined) chunks.push(chunk);
+    }
+    result[collection] = metadata.type === 'array'
+      ? chunks.flat()
+      : Object.assign({}, ...chunks);
+  }
+  return result;
+}
+
+async function readSyncSettings(keys = null) {
+  const decoded = decodeSyncSnapshot(await chrome.storage.sync.get(null));
+  if (keys == null) return decoded;
+  const requested = typeof keys === 'string' ? [keys] : keys;
+  return Object.fromEntries(requested
+    .filter(key => Object.prototype.hasOwnProperty.call(decoded, key))
+    .map(key => [key, decoded[key]]));
+}
+
+function buildSyncPayload(snapshot) {
+  const payload = {};
+  const collectionIndex = {};
+  for (const [key, value] of Object.entries(snapshot || {})) {
+    if (!SYNC_COLLECTIONS.has(key) && key !== COLLECTION_INDEX_KEY && !key.startsWith(COLLECTION_CHUNK_PREFIX)) {
+      payload[key] = value;
+    }
+  }
+
+  for (const collection of SYNC_COLLECTIONS) {
+    const { type, chunks } = splitCollection(collection, snapshot?.[collection]);
+    collectionIndex[collection] = { type, count: chunks.length };
+    chunks.forEach((chunk, index) => {
+      payload[collectionChunkKey(collection, index)] = chunk;
+    });
+  }
+  payload[COLLECTION_INDEX_KEY] = collectionIndex;
+
+  let totalBytes = 0;
+  for (const [key, value] of Object.entries(payload)) {
+    const itemBytes = utf8ByteLength(key) + utf8ByteLength(value);
+    if (itemBytes > 8192) throw new Error(`Sync item ${key} exceeds Chrome's 8 KB quota`);
+    totalBytes += itemBytes;
+  }
+  if (totalBytes > SYNC_TOTAL_BUDGET_BYTES) {
+    throw new Error('Settings exceed the safe Chrome Sync budget; remove some site or URL rules');
+  }
+  return payload;
+}
+
+async function commitSyncSnapshot(snapshot) {
+  const payload = buildSyncPayload(snapshot);
+  const existing = await chrome.storage.sync.get(null);
+  const staleKeys = Object.keys(existing).filter(key => !Object.prototype.hasOwnProperty.call(payload, key));
+  // Removing obsolete chunks after the write can temporarily exceed Chrome's
+  // total Sync quota even though the final snapshot is within budget. Remove
+  // them first and restore them if the atomic set fails, so migrations and
+  // shrinking collections are both quota-safe and recoverable.
+  const staleEntries = Object.fromEntries(staleKeys.map(key => [key, existing[key]]));
+  if (staleKeys.length > 0) await chrome.storage.sync.remove(staleKeys);
+  try {
+    await chrome.storage.sync.set(payload);
+  } catch (error) {
+    if (staleKeys.length > 0) await chrome.storage.sync.set(staleEntries).catch(() => {});
+    throw error;
+  }
+  return snapshot;
+}
+
+function mutateSyncSettings(mutator) {
+  const operation = syncWriteQueue.then(async () => {
+    const current = await readSyncSettings();
+    const next = await mutator(current);
+    return await commitSyncSnapshot(next);
+  });
+  syncWriteQueue = operation.catch(() => {});
+  return operation;
+}
+
+function writeSyncSettings(updates) {
+  return mutateSyncSettings(current => ({ ...current, ...updates }));
+}
+
+function replaceSyncSettings(settings) {
+  return mutateSyncSettings(() => settings);
+}
 
 // Per-tab media frame registry. Content scripts run in every frame, so commands
 // have to be routed to one elected frame instead of broadcast to all of them.
 const FRAME_STATE_TTL = 5 * 60 * 1000;
-const ACTIVE_FRAME_RELAY_TYPES = new Set(['getActiveState', 'setSpeed']);
+const ACTIVE_FRAME_RELAY_TYPES = new Set(['getActiveState', 'setSpeed', 'togglePlayback']);
 const frameMediaStates = new Map(); // Map<tabId, Map<frameId, { state, updatedAt }>>
 
 function recordFrameMediaState(sender, state) {
@@ -52,34 +213,39 @@ function scoreFrame({ state, updatedAt }) {
   return score;
 }
 
-function pickActiveFrame(tabId) {
+function rankActiveFrames(tabId) {
   const frames = frameMediaStates.get(tabId);
-  if (!frames) return null;
+  if (!frames) return [];
+  return [...frames.entries()]
+    .map(([frameId, entry]) => ({ frameId, score: scoreFrame(entry) }))
+    .filter(entry => entry.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .map(entry => entry.frameId);
+}
 
-  let bestFrameId = null;
-  let bestScore = -1;
-  for (const [frameId, entry] of frames) {
-    const score = scoreFrame(entry);
-    if (score > bestScore) {
-      bestScore = score;
-      bestFrameId = frameId;
-    }
-  }
-  return bestFrameId;
+function pickActiveFrame(tabId) {
+  return rankActiveFrames(tabId)[0] ?? null;
 }
 
 async function sendToActiveFrame(tabId, message) {
-  const frameId = pickActiveFrame(tabId);
-  if (frameId !== null) {
+  const candidates = rankActiveFrames(tabId);
+  for (const frameId of candidates) {
     try {
       return await chrome.tabs.sendMessage(tabId, message, { frameId });
     } catch {
-      // The frame went away between reporting and dispatch. Drop it and fall
-      // back to a tab-wide send so the command still lands.
+      // The frame went away between reporting and dispatch. Drop it and retry
+      // the next ranked reporter. Never omit frameId: doing so broadcasts the
+      // command to every content script in the tab.
       frameMediaStates.get(tabId)?.delete(frameId);
     }
   }
-  return await chrome.tabs.sendMessage(tabId, message).catch(() => undefined);
+
+  // A newly navigated tab may not have reported yet. The top frame is the only
+  // safe fallback; an explicit frameId guarantees at-most-once dispatch.
+  if (!candidates.includes(0)) {
+    return await chrome.tabs.sendMessage(tabId, message, { frameId: 0 }).catch(() => undefined);
+  }
+  return undefined;
 }
 
 chrome.tabs.onRemoved.addListener(tabId => frameMediaStates.delete(tabId));
@@ -118,20 +284,22 @@ function flushCollectionWrites() {
   pendingCollectionWrites = new Map();
 
   const operation = collectionWriteQueue.then(async () => {
-    const collections = [...batch.keys()];
-    const current = await chrome.storage.sync.get(collections);
     const updates = {};
-
-    for (const [collection, pending] of batch) {
-      const next = { ...(current[collection] || {}) };
-      for (const [entryKey, value] of pending.entries) {
-        if (value === null || value === undefined) delete next[entryKey];
-        else next[entryKey] = value;
+    await mutateSyncSettings(current => {
+      for (const [collection, pending] of batch) {
+        const next = { ...(current[collection] || {}) };
+        for (const [entryKey, value] of pending.entries) {
+          if (value === null || value === undefined) delete next[entryKey];
+          else next[entryKey] = value;
+        }
+        updates[collection] = sanitizeSettingsPatch({ [collection]: next })[collection] || {};
       }
-      updates[collection] = sanitizeSettingsPatch({ [collection]: next })[collection] || {};
-    }
-
-    await chrome.storage.sync.set(updates);
+      return { ...current, ...updates };
+    });
+    // Every live frame owns one normalized snapshot. Keep collection changes
+    // coherent without resending unrelated settings or asking each frame to
+    // reread storage.
+    await notifyTabs(updates);
     for (const pending of batch.values()) pending.waiters.forEach(waiter => waiter.resolve(updates));
     return updates;
   }).catch(error => {
@@ -164,32 +332,33 @@ function addTimeSaved(seconds) {
   return operation;
 }
 
-async function notifyTabs(settings) {
+async function notifyTabs(settings, { replace = false } = {}) {
   const tabs = await chrome.tabs.query({});
   await Promise.allSettled(tabs.map(tab =>
-    chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings })
+    chrome.tabs.sendMessage(tab.id, replace
+      ? { type: 'settingsUpdated', settings, replace: true }
+      : { type: 'settingsUpdated', patch: settings })
   ));
 }
 
 // Initialize default settings on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
-    await chrome.storage.sync.set(createDefaultSettings());
+    await replaceSyncSettings(createDefaultSettings());
     await chrome.storage.local.set({ timeSaved: 0 });
     timeSavedCache = 0;
     console.log('Video Speed Pro: Default settings initialized');
   } else if (details.reason === 'update') {
     // Merge new default settings with existing ones
     const [existing, existingLocal] = await Promise.all([
-      chrome.storage.sync.get(null),
+      readSyncSettings(),
       chrome.storage.local.get(['timeSaved'])
     ]);
     const existingTimeSaved = typeof existing.timeSaved === 'number' ? existing.timeSaved : null;
     const localTimeSaved = typeof existingLocal.timeSaved === 'number' ? existingLocal.timeSaved : null;
     const migratedTimeSaved = existingTimeSaved ?? localTimeSaved ?? 0;
     const merged = normalizeSettings(existing);
-    await chrome.storage.sync.set(merged);
-    await chrome.storage.sync.remove('timeSaved');
+    await replaceSyncSettings(merged);
     await chrome.storage.local.set({ timeSaved: migratedTimeSaved });
     timeSavedCache = migratedTimeSaved;
     console.log('Video Speed Pro: Settings migrated');
@@ -234,7 +403,7 @@ async function handleMessage(message, sender) {
 
     case 'getSettings': {
       const [syncSettings, localSettings] = await Promise.all([
-        chrome.storage.sync.get(null),
+        readSyncSettings(),
         chrome.storage.local.get(['timeSaved'])
       ]);
       const timeSaved = typeof localSettings.timeSaved === 'number' ? localSettings.timeSaved : 0;
@@ -248,14 +417,13 @@ async function handleMessage(message, sender) {
       const updates = sanitizeSettingsPatch(requested);
       delete updates.timeSaved;
       const lastSyncTime = Date.now();
-      await chrome.storage.sync.set({ ...updates, lastSyncTime });
-      const current = normalizeSettings(await chrome.storage.sync.get(null));
-      await notifyTabs(current);
+      const current = normalizeSettings(await writeSyncSettings({ ...updates, lastSyncTime }));
+      await notifyTabs({ ...updates, lastSyncTime });
       return { success: true, settings: current, lastSyncTime };
     }
 
     case 'getSavedSpeed': {
-      const settings = await chrome.storage.sync.get(['savedSpeeds', 'rememberSpeed']);
+      const settings = await readSyncSettings(['savedSpeeds', 'rememberSpeed']);
       const savedSpeeds = sanitizeSettingsPatch({ savedSpeeds: settings.savedSpeeds }).savedSpeeds || {};
       if (settings.rememberSpeed && savedSpeeds) {
         return { speed: savedSpeeds[message.hostname] ?? null };
@@ -278,15 +446,14 @@ async function handleMessage(message, sender) {
     }
 
     case 'getSitePresetSpeed': {
-      const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
+      const data = await readSyncSettings(['sitePresetSpeeds']);
       const sitePresetSpeeds = sanitizeSettingsPatch({ sitePresetSpeeds: data.sitePresetSpeeds }).sitePresetSpeeds || {};
       return { speed: sitePresetSpeeds[message.hostname] ?? null };
     }
 
     case 'setPreservePitch': {
-      await chrome.storage.sync.set({ preservePitch: message.preservePitch === true });
-      const updated = normalizeSettings(await chrome.storage.sync.get(null));
-      await notifyTabs(updated);
+      await writeSyncSettings({ preservePitch: message.preservePitch === true });
+      await notifyTabs({ preservePitch: message.preservePitch === true });
       return { success: true };
     }
 
@@ -299,7 +466,7 @@ async function handleMessage(message, sender) {
 
     case 'exportSettings': {
       const [exportSync, exportLocal] = await Promise.all([
-        chrome.storage.sync.get(null),
+        readSyncSettings(),
         chrome.storage.local.get(['timeSaved'])
       ]);
       return {
@@ -316,22 +483,20 @@ async function handleMessage(message, sender) {
         : 0;
       const importSync = normalizeSettings(message.settings);
       importSync.lastSyncTime = Date.now();
-      await chrome.storage.sync.clear();
-      await chrome.storage.sync.set(importSync);
+      await replaceSyncSettings(importSync);
       await chrome.storage.local.set({ timeSaved: importedTimeSaved });
       timeSavedCache = importedTimeSaved;
-      await notifyTabs(importSync);
+      await notifyTabs(importSync, { replace: true });
       return { success: true, settings: { ...importSync, timeSaved: importedTimeSaved } };
     }
 
     case 'resetSettings': {
       await flushCollectionWrites();
       const defaults = createDefaultSettings();
-      await chrome.storage.sync.clear();
-      await chrome.storage.sync.set(defaults);
+      await replaceSyncSettings(defaults);
       await chrome.storage.local.set({ timeSaved: 0 });
       timeSavedCache = 0;
-      await notifyTabs(defaults);
+      await notifyTabs(defaults, { replace: true });
       return { success: true, settings: { ...defaults, timeSaved: 0 } };
     }
 
@@ -342,22 +507,22 @@ async function handleMessage(message, sender) {
 
     case 'updateSyncTime': {
       const syncTime = Date.now();
-      await chrome.storage.sync.set({ lastSyncTime: syncTime });
+      await writeSyncSettings({ lastSyncTime: syncTime });
       return { success: true, lastSyncTime: syncTime };
     }
 
     case 'getSyncStatus': {
-      const syncData = await chrome.storage.sync.get(['lastSyncTime']);
+      const syncData = await readSyncSettings(['lastSyncTime']);
       return { lastSyncTime: syncData.lastSyncTime || null };
     }
 
     case 'getUrlRuleSpeed': {
-      const ruleSettings = await chrome.storage.sync.get(['urlRules']);
+      const ruleSettings = await readSyncSettings(['urlRules']);
       return findUrlRule(message.url, ruleSettings.urlRules || []);
     }
 
     case 'getIntroOutroSettings': {
-      const introOutroData = normalizeSettings(await chrome.storage.sync.get([
+      const introOutroData = normalizeSettings(await readSyncSettings([
         'introOutroEnabled',
         'defaultIntroSkip',
         'defaultOutroSkip',
@@ -414,7 +579,7 @@ async function handleMessage(message, sender) {
     }
 
     case 'getSavedFilters': {
-      const filterData = await chrome.storage.sync.get(['savedFilters', 'rememberFilters']);
+      const filterData = await readSyncSettings(['savedFilters', 'rememberFilters']);
       const savedFilters = sanitizeSettingsPatch({ savedFilters: filterData.savedFilters }).savedFilters || {};
       if (filterData.rememberFilters && savedFilters) {
         return { filters: savedFilters[message.hostname] || null };
@@ -432,7 +597,7 @@ async function handleMessage(message, sender) {
     }
 
     case 'getSavedVolumeBoost': {
-      const volumeData = await chrome.storage.sync.get(['savedVolumeBoost', 'rememberVolumeBoost']);
+      const volumeData = await readSyncSettings(['savedVolumeBoost', 'rememberVolumeBoost']);
       const savedVolumeBoost = sanitizeSettingsPatch({ savedVolumeBoost: volumeData.savedVolumeBoost }).savedVolumeBoost || {};
       if (volumeData.rememberVolumeBoost && savedVolumeBoost) {
         return { level: savedVolumeBoost[message.hostname] || null };
@@ -446,6 +611,6 @@ async function handleMessage(message, sender) {
 }
 
 async function checkSiteAccess(url) {
-  const config = await chrome.storage.sync.get(['enabled', 'siteAccessMode', 'blacklist', 'whitelist']);
+  const config = await readSyncSettings(['enabled', 'siteAccessMode', 'blacklist', 'whitelist']);
   return resolveSiteAccess(url, config);
 }

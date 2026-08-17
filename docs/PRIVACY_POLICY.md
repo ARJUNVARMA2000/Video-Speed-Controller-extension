@@ -1,130 +1,65 @@
 # Privacy Policy for Video Speed Controller Pro
 
-**Last Updated:** January 2025
+**Last updated:** August 17, 2026
 
-## Overview
+Video Speed Controller Pro does not collect analytics, create user profiles, sell data, or send
+your activity to developer-operated servers. Its runtime behavior is local to the browser, apart
+from Chrome's optional built-in settings sync described below.
 
-Video Speed Controller Pro ("we", "our", or "the extension") is committed to protecting your privacy. This privacy policy explains how we handle your data when you use our browser extension.
+## Data the extension processes
 
-## Our Privacy Commitment
+The extension reads the current page URL and HTML media-element state in memory so it can apply
+site/URL rules, choose the active player, change playback speed, and calculate remaining time. It
+does not store a browsing history or a list of watched videos.
 
-**We do NOT collect, store, or transmit any of your personal data to external servers.**
+If silence skipping is enabled, the browser's Web Audio API calculates short-lived amplitude
+samples in memory. Audio is not recorded, retained, uploaded, or exposed outside the page's local
+extension context. Unsupported, protected, or clearly cross-origin media is not analysed.
 
-This extension operates entirely locally on your device. All data remains on your computer and is never sent to us or any third party.
+## Data stored by Chrome
 
-## Data Collection
+The following user-created settings may be stored with `chrome.storage.sync`:
 
-### What We DON'T Collect
+- playback speed, custom presets, and speed-step preferences;
+- shortcut chords and controller appearance;
+- site access lists, URL rules, and intro/outro rules;
+- saved per-site speed, filter, and volume-boost preferences; and
+- silence-skip preferences.
 
-- ❌ **No browsing history** — We don't track which websites you visit
-- ❌ **No video viewing habits** — We don't monitor what videos you watch
-- ❌ **No personal information** — We don't collect names, emails, or any identifying data
-- ❌ **No analytics or telemetry** — We don't track how you use the extension
-- ❌ **No network requests** — The extension makes zero calls to external servers
-- ❌ **No third-party services** — We don't use any analytics, tracking, or data collection services
+Chrome may sync those settings through the Google account connected to the browser. That service
+is operated by the browser provider; the extension developer cannot access the synced contents.
+Disable Chrome Sync to keep these settings only in the local browser profile.
 
-### What We Store Locally
+The aggregate time-saved counter is stored in `chrome.storage.local` and is not placed in the
+extension's Sync data.
 
-All data is stored **exclusively on your device** using your browser's built-in storage APIs:
+## Permissions and site access
 
-- **Playback speed preferences** — Your preferred video speeds per website
-- **Keyboard shortcut configurations** — Your custom keyboard shortcuts
-- **UI preferences** — Controller appearance settings (colors, opacity, mode)
-- **Site access rules** — Your blacklist/whitelist settings
-- **URL speed rules** — Custom speed rules for specific URL patterns
-- **Video filter settings** — Brightness, contrast, and saturation preferences per site
-- **Volume boost levels** — Your volume boost preferences per site
-- **Intro/outro skip settings** — Your skip preferences and per-site rules
-- **Time saved statistics** — Local counter of time saved (optional feature)
+- `storage` saves and syncs the preferences listed above.
+- `activeTab` lets the popup identify and control the current tab.
+- A Manifest V3 content script runs on web pages so the extension can discover HTML5 video/audio
+  and react when media is added dynamically or inside reachable frames and open shadow roots.
 
-## Data Storage
+The extension does not request browsing-history, cookies, identity, location, microphone, camera,
+downloads, or native-application permissions.
 
-### Browser Storage APIs
+## Network activity and sharing
 
-We use two browser storage APIs:
+The shipped extension contains no analytics SDK, advertising SDK, telemetry endpoint, or
+developer backend. It does not share or sell personal data. Loading a video and Chrome Sync may
+involve the page's provider and Google respectively, but the extension does not add tracking
+requests to those services.
 
-1. **`chrome.storage.sync`** — For settings that can sync across your devices
-   - This uses your browser's built-in sync service (Google Account for Chrome, Firefox Account for Firefox)
-   - **We do NOT have access to this data** — it's managed entirely by your browser
-   - If you disable browser sync, data remains local only
+The development-only locale generator is not part of the packaged extension and is not executed
+in users' browsers.
 
-2. **`chrome.storage.local`** — For data that should not sync (e.g., time saved statistics)
-   - This data never leaves your device
-   - It's stored in your browser's local storage
+## Deletion
 
-### Data Location
+Use **Reset settings** in the options page to clear extension preferences and the local time-saved
+counter, or uninstall the extension to remove its browser-managed storage. Synced settings may
+also be managed through Chrome's Sync controls.
 
-All data is stored in your browser's profile directory:
-- **Chrome/Edge/Brave:** `%LOCALAPPDATA%\Google\Chrome\User Data\Default\Local Extension Settings\[Extension ID]`
-- **Firefox:** `%APPDATA%\Mozilla\Firefox\Profiles\[Profile]\storage\default\[Extension ID]`
+## Changes and contact
 
-## Permissions Explained
-
-Our extension requests minimal permissions:
-
-- **`storage`** — Required to save your preferences locally
-- **`activeTab`** — Required to interact with videos on the current tab only
-
-We do NOT request:
-- ❌ Access to all websites (we use `activeTab` which only works on the current tab)
-- ❌ Background access to browsing data
-- ❌ Network access to external servers
-- ❌ Any other sensitive permissions
-
-## Data Sharing
-
-**We do NOT share your data with anyone.**
-
-- No data is sent to external servers
-- No data is shared with third parties
-- No data is used for advertising or marketing
-- No data is sold or monetized
-
-## Browser Sync
-
-If you have browser sync enabled (Chrome Sync or Firefox Sync), your settings may sync across your devices. This is handled entirely by your browser's sync service, not by us. You can disable sync in your browser settings if you prefer.
-
-## Data Deletion
-
-You can delete all extension data at any time:
-
-1. **Via Extension Settings:** Click the "Reset" button in the extension popup
-2. **Via Browser:** Uninstall the extension (this removes all stored data)
-3. **Via Browser Storage:** Manually clear extension storage in browser developer tools
-
-## Children's Privacy
-
-Our extension does not knowingly collect any information from children. Since we don't collect any data, this is not applicable, but we want to be clear: **we don't collect data from anyone, including children.**
-
-## Changes to This Policy
-
-We may update this privacy policy from time to time. Any changes will be reflected in the "Last Updated" date at the top of this document. We encourage you to review this policy periodically.
-
-## Contact Us
-
-If you have questions about this privacy policy or our data practices, please contact us:
-
-- **GitHub Issues:** https://github.com/ARJUNVARMA2000/Video-Speed-Controller-extension/issues
-- **Email:** [REPLACE: Your Support Email, e.g., support@yourdomain.com or your-email@gmail.com]
-
-## Compliance
-
-This extension complies with:
-- **GDPR (General Data Protection Regulation)** — No data collection means no GDPR concerns
-- **CCPA (California Consumer Privacy Act)** — No data collection means no CCPA concerns
-- **Browser Extension Store Policies** — Complies with Chrome Web Store and Firefox Add-ons policies
-
-## Verification
-
-You can verify our privacy claims by:
-1. **Inspecting the source code** — All code is available in the extension package
-2. **Using browser developer tools** — Check the Network tab to confirm no external requests
-3. **Reviewing permissions** — We only request minimal, necessary permissions
-
-## Summary
-
-**In simple terms:** This extension works entirely on your device. We don't collect, store, or transmit any of your data. Your privacy is protected by design.
-
----
-
-*This privacy policy is effective as of the date listed above and applies to all versions of Video Speed Controller Pro.*
+Material changes will update the date at the top of this policy. Questions can be filed through
+[GitHub Issues](https://github.com/ARJUNVARMA2000/Video-Speed-Controller-extension/issues).

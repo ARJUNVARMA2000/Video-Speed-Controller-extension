@@ -351,5 +351,392 @@
   },
   "ui_work_on_audio": {
     "message": "Work on Audio"
+  },
+  "ui_advanced_settings": {
+    "message": "Advanced settings"
+  },
+  "ui_playback_tuning": {
+    "message": "Playback Tuning"
+  },
+  "ui_speed_step": {
+    "message": "Speed step"
+  },
+  "ui_speed_step_desc": {
+    "message": "Amount used by plus, minus, wheel, and browser commands"
+  },
+  "ui_custom_presets": {
+    "message": "Custom presets"
+  },
+  "ui_custom_presets_desc": {
+    "message": "Comma-separated speeds shown in the popup and controller"
+  },
+  "ui_skip_silence": {
+    "message": "Skip silence"
+  },
+  "ui_skip_silence_desc": {
+    "message": "Temporarily fast-forward sustained quiet sections"
+  },
+  "ui_silence_threshold": {
+    "message": "Silence threshold"
+  },
+  "ui_silence_threshold_desc": {
+    "message": "Audio level considered silent"
+  },
+  "ui_minimum_silence": {
+    "message": "Minimum silence"
+  },
+  "ui_minimum_silence_desc": {
+    "message": "Quiet time before acceleration begins"
+  },
+  "ui_silence_speed": {
+    "message": "Silence speed"
+  },
+  "ui_silence_speed_desc": {
+    "message": "Temporary playback rate during silence"
+  },
+  "ui_play": {
+    "message": "Play"
+  },
+  "ui_pause": {
+    "message": "Pause"
+  },
+  "ui_remaining": {
+    "message": "remaining"
+  },
+  "ui_live_or_unknown_duration": {
+    "message": "Live or unknown duration"
+  },
+  "ui_no_active_media": {
+    "message": "No active media"
+  },
+  "ui_video_ready": {
+    "message": "Video ready"
+  },
+  "ui_controlling_active_video": {
+    "message": "Controlling active video"
+  },
+  "ui_decrease_speed": {
+    "message": "Decrease playback speed"
+  },
+  "ui_increase_speed": {
+    "message": "Increase playback speed"
+  },
+  "ui_speed": {
+    "message": "Speed"
+  },
+  "ui_seek_backward": {
+    "message": "Seek backward"
+  },
+  "ui_seek_forward": {
+    "message": "Seek forward"
+  },
+  "ui_pitch_correction": {
+    "message": "Pitch correction"
+  },
+  "ui_filters": {
+    "message": "Filters"
+  },
+  "ui_reset_filters": {
+    "message": "Reset filters"
+  },
+  "ui_not_set": {
+    "message": "Not set"
+  },
+  "ui_normal": {
+    "message": "Normal"
+  },
+  "ui_open_video_page": {
+    "message": "Open a page with an HTML5 video."
+  },
+  "ui_on": {
+    "message": "ON"
+  },
+  "ui_not_available": {
+    "message": "N/A"
+  },
+  "ui_pitch_correction_desc": {
+    "message": "When on, keeps the original pitch. When off, pitch changes with speed."
+  },
+  "ui_pitch_not_supported": {
+    "message": "Pitch correction is not supported for this media."
+  },
+  "ui_set_speed_to": {
+    "message": "Set speed to"
+  },
+  "ui_seconds": {
+    "message": "seconds"
+  },
+  "ui_previous_frame": {
+    "message": "Previous frame"
+  },
+  "ui_next_frame": {
+    "message": "Next frame"
+  },
+  "ui_frame": {
+    "message": "Frame"
+  },
+  "ui_set_loop_start": {
+    "message": "Set loop start"
+  },
+  "ui_set_loop_end": {
+    "message": "Set loop end"
+  },
+  "ui_clear_loop": {
+    "message": "Clear loop"
+  },
+  "ui_video_brightness": {
+    "message": "Video brightness"
+  },
+  "ui_video_contrast": {
+    "message": "Video contrast"
+  },
+  "ui_video_saturation": {
+    "message": "Video saturation"
+  },
+  "ui_capture_screenshot": {
+    "message": "Capture screenshot"
+  },
+  "ui_video_only": {
+    "message": "Video only"
+  },
+  "ui_video_not_ready": {
+    "message": "Video not ready"
+  },
+  "ui_failed": {
+    "message": "Failed"
+  },
+  "ui_saved": {
+    "message": "Saved!"
+  },
+  "ui_error": {
+    "message": "Error"
+  },
+  "ui_loop_a": {
+    "message": "Loop A"
+  },
+  "ui_loop_b": {
+    "message": "Loop B"
+  },
+  "ui_active": {
+    "message": "Active"
+  },
+  "ui_cleared": {
+    "message": "Cleared"
+  },
+  "ui_set_a_b_first": {
+    "message": "Set A & B first"
+  },
+  "ui_paused": {
+    "message": "Paused"
+  },
+  "ui_volume": {
+    "message": "Volume"
+  },
+  "ui_live": {
+    "message": "LIVE"
+  },
+  "ui_pip_speed": {
+    "message": "PiP Speed"
+  },
+  "ui_decrease_pip_speed": {
+    "message": "Decrease picture-in-picture speed"
+  },
+  "ui_reset_pip_speed": {
+    "message": "Reset picture-in-picture speed"
+  },
+  "ui_increase_pip_speed": {
+    "message": "Increase picture-in-picture speed"
+  },
+  "ui_key_for": {
+    "message": "Key for"
+  },
+  "ui_value_for": {
+    "message": "Value for"
+  },
+  "ui_enable": {
+    "message": "Enable"
+  },
+  "ui_remove": {
+    "message": "Remove"
+  },
+  "ui_remove_url_rule": {
+    "message": "Remove URL rule"
+  },
+  "ui_remove_intro_outro_rule": {
+    "message": "Remove intro and outro rule for"
+  },
+  "ui_unavailable": {
+    "message": "Unavailable"
+  },
+  "ui_unsupported_page": {
+    "message": "Unsupported page"
+  },
+  "ui_saved_label": {
+    "message": "Saved"
+  },
+  "ui_using_browser_storage": {
+    "message": "Using browser storage"
+  },
+  "ui_sync_unavailable": {
+    "message": "Sync status unavailable"
+  },
+  "ui_just_now": {
+    "message": "Just now"
+  },
+  "ui_ago": {
+    "message": "ago"
+  },
+  "notice_load_settings_failed": {
+    "message": "Could not load extension settings"
+  },
+  "notice_open_video_for_quick_controls": {
+    "message": "Open a page with an HTML5 video to use quick speed controls."
+  },
+  "notice_no_controllable_video": {
+    "message": "No controllable video found on this page."
+  },
+  "notice_video_found_choose_speed": {
+    "message": "Video found — choose a speed."
+  },
+  "notice_reload_after_install": {
+    "message": "Reload this page once after installing the extension."
+  },
+  "notice_speed_updated": {
+    "message": "Speed updated."
+  },
+  "notice_control_video_failed": {
+    "message": "Could not control a video on this page."
+  },
+  "notice_enter_site": {
+    "message": "Please enter a site"
+  },
+  "notice_enter_intro_outro": {
+    "message": "Please enter intro or outro time"
+  },
+  "notice_site_rule_exists": {
+    "message": "Rule for this site already exists"
+  },
+  "notice_site_rule_added": {
+    "message": "Site rule added"
+  },
+  "notice_shortcut_reserved": {
+    "message": "That browser shortcut is reserved"
+  },
+  "notice_shortcut_conflict": {
+    "message": "Key already in use by another shortcut"
+  },
+  "notice_invalid_regex": {
+    "message": "Invalid regular expression pattern"
+  },
+  "notice_pattern_exists": {
+    "message": "Pattern already exists"
+  },
+  "notice_site_blocked": {
+    "message": "Site added to block list"
+  },
+  "notice_site_allowed": {
+    "message": "Site added to allow list"
+  },
+  "notice_enter_url_pattern": {
+    "message": "Please enter a URL pattern"
+  },
+  "notice_speed_range": {
+    "message": "Speed must be between 0.1 and 16"
+  },
+  "notice_url_rule_exists": {
+    "message": "Rule for this pattern already exists"
+  },
+  "notice_url_rule_added": {
+    "message": "URL rule added"
+  },
+  "notice_settings_exported": {
+    "message": "Settings exported"
+  },
+  "notice_settings_export_failed": {
+    "message": "Could not export settings"
+  },
+  "notice_settings_imported": {
+    "message": "Settings imported"
+  },
+  "notice_settings_import_failed": {
+    "message": "Failed to import settings"
+  },
+  "notice_confirm_reset": {
+    "message": "Reset all settings to defaults?"
+  },
+  "notice_settings_reset": {
+    "message": "Settings reset to defaults"
+  },
+  "notice_settings_reset_failed": {
+    "message": "Could not reset settings"
+  },
+  "notice_saving": {
+    "message": "Saving…"
+  },
+  "notice_saved_just_now": {
+    "message": "Saved just now"
+  },
+  "notice_save_failed": {
+    "message": "Save failed"
+  },
+  "notice_settings_save_failed": {
+    "message": "Settings could not be saved"
+  },
+  "notice_report_copied": {
+    "message": "Report copied to clipboard!"
+  },
+  "notice_describe_issue": {
+    "message": "Please describe the issue"
+  },
+  "notice_opening_github": {
+    "message": "Opening GitHub issue…"
+  },
+  "notice_github_not_configured": {
+    "message": "GitHub repository not configured"
+  },
+  "notice_no_supported_tab": {
+    "message": "No supported active tab"
+  },
+  "shortcut_show_controller": {
+    "message": "Show or hide controller"
+  },
+  "shortcut_decrease_speed": {
+    "message": "Decrease speed"
+  },
+  "shortcut_increase_speed": {
+    "message": "Increase speed"
+  },
+  "shortcut_rewind": {
+    "message": "Rewind"
+  },
+  "shortcut_advance": {
+    "message": "Advance"
+  },
+  "shortcut_reset_speed": {
+    "message": "Reset speed"
+  },
+  "shortcut_preferred_speed": {
+    "message": "Hold to boost"
+  },
+  "shortcut_frame_forward": {
+    "message": "Next frame"
+  },
+  "shortcut_frame_backward": {
+    "message": "Previous frame"
+  },
+  "shortcut_screenshot": {
+    "message": "Screenshot"
+  },
+  "shortcut_set_loop_a": {
+    "message": "Set loop A"
+  },
+  "shortcut_set_loop_b": {
+    "message": "Set loop B"
+  },
+  "shortcut_clear_loop": {
+    "message": "Clear loop"
+  },
+  "shortcut_toggle_loop": {
+    "message": "Toggle loop"
   }
 }

@@ -1,0 +1,47 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #10111b;
+  color: #f7f7fb;
+}
+
+* { box-sizing: border-box; }
+body { width: 340px; margin: 0; background: linear-gradient(145deg, #17192a, #0f1019); }
+button, input { font: inherit; }
+button { color: inherit; }
+
+header, footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
+header { border-bottom: 1px solid #ffffff18; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand img { width: 34px; height: 34px; }
+h1 { margin: 0; font-size: 15px; }
+.brand p { margin: 3px 0 0; max-width: 210px; overflow: hidden; text-overflow: ellipsis; color: #a7a9ba; font-size: 11px; white-space: nowrap; }
+
+.switch { position: relative; width: 38px; height: 22px; }
+.switch input { opacity: 0; position: absolute; }
+.switch span { position: absolute; inset: 0; border-radius: 20px; background: #3a3c4d; cursor: pointer; }
+.switch span::after { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch input:checked + span { background: #e94560; }
+.switch input:checked + span::after { transform: translateX(16px); }
+
+main { padding: 16px; }
+.now-playing { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 12px; padding: 13px; border: 1px solid #ffffff18; border-radius: 12px; background: #ffffff08; }
+.round, .stepper button { border: 1px solid #ffffff22; background: #ffffff0b; cursor: pointer; }
+.round { width: 42px; height: 42px; border-radius: 50%; color: #e94560; }
+.speed-readout { display: flex; flex-direction: column; }
+.speed-readout strong { color: #e94560; font-size: 23px; }
+.speed-readout span { margin-top: 2px; color: #a7a9ba; font-size: 11px; }
+.stepper { display: flex; gap: 5px; }
+.stepper button { width: 31px; height: 31px; border-radius: 7px; font-size: 19px; }
+button:hover:not(:disabled), button:focus-visible { border-color: #e94560; background: #e9456026; outline: none; }
+button:disabled { opacity: .4; cursor: default; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.presets button { flex: 1 0 50px; height: 32px; border: 1px solid #ffffff18; border-radius: 8px; background: #ffffff08; cursor: pointer; font-size: 12px; }
+.presets button.active { border-color: #e94560; background: #e94560; }
+.status { min-height: 16px; margin: 10px 2px 0; color: #a7a9ba; font-size: 11px; }
+.status.error { color: #ff8295; }
+
+footer { border-top: 1px solid #ffffff18; color: #a7a9ba; font-size: 11px; }
+footer strong { color: #fff; }
+footer button { border: 0; padding: 5px; background: transparent; color: #e94560; cursor: pointer; font-size: 11px; }

@@ -418,3 +418,114 @@ browser, but not with the extension itself attached. Speed enforcement needs a r
 resets `playbackRate` (YouTube between videos, Netflix), and frame election needs a page with
 an embedded player plus a second video. `docs/TESTING.md` now carries cases 15-25 covering
 shadow DOM, frame routing, and enforcement; the test lab has fixtures for the shadow cases.
+
+---
+
+# v1.6 full reliability, performance, and competitive implementation
+
+## Goal
+
+Implement every remaining recommendation from the Aug 17 follow-up audit without regressing the
+existing v1.4/v1.5 behavior. Reliability and automated browser coverage come before new features.
+
+## Scope assumptions for check-in
+
+- Keep Chrome Manifest V3 as the shipping target; Firefox remains out of scope.
+- Replace per-media page-DOM overlays with one fixed, closed-shadow portal per frame. The portal
+  follows the active media without moving the media or changing any page-owned container styles.
+- “Actual translations” means an initial human-reviewable catalogue for Spanish, Brazilian
+  Portuguese, French, German, and Japanese, with English fallback. Runtime overlay strings are
+  included, not only the popup.
+- Silence skipping is opt-in and off by default. It uses a conservative analyser/fast-playback
+  mode, restores the user's speed immediately when sound returns, and disables itself cleanly on
+  protected or unsupported media.
+- Preserve import/export compatibility by migrating old settings and retaining safe defaults.
+
+## Plan
+
+### Phase 1 — release blockers and regression harness
+
+- [x] Replace wrapper/container positioning with a fixed shadow portal and geometry tracker;
+      never reparent `<video>`/`<audio>`, mutate YouTube containers, or leave page DOM behind.
+- [x] Maintain active-media arbitration within each frame (playing, last interacted, visible
+      area), retarget the shared controller on play/pause/removal, and ensure popup/commands never
+      use a stale paused element while another media element is active.
+- [x] Replace tab-wide frame fallback with ranked targeted retries and a main-frame-only final
+      fallback; add tests proving commands and popup speed changes execute in at most one frame.
+- [x] Add automated Chrome end-to-end coverage with the unpacked extension for portal placement,
+      hostile CSS, dynamic/open-shadow media, multiple videos, multiple frames, popup routing,
+      speed enforcement, cleanup, and storage migration.
+
+### Phase 2 — page and storage performance
+
+- [x] Batch time-saved accounting for 30 seconds and flush on pause, ended, visibility change,
+      pagehide, deactivation, and context invalidation; test that long playback no longer writes
+      once per second and that the final partial batch is retained.
+- [x] Resolve the effective URL/site/remembered speed from the already-loaded settings once per
+      frame and URL, then apply the cached result to media without per-element message round trips.
+- [x] Defer stylesheet fetch/parse and portal creation until the first eligible media is attached.
+- [x] Use the single active controller, one shared `ResizeObserver`, and coalesced scroll/resize
+      geometry updates; retain per-media state only where behavior genuinely differs.
+- [x] Use one lazy `AudioContext` per frame with per-media source nodes connected only as needed;
+      suspend it when boost and silence detection are inactive and close/disconnect nodes on media
+      removal or extension deactivation.
+- [x] Enforce serialized Chrome Sync byte budgets. Split large URL/site collections into bounded
+      keys (with migration), reject over-budget imports with a useful error, and add quota tests.
+- [x] Replace full-settings broadcasts with storage-change patches where safe, while keeping a
+      single normalized settings snapshot in each live content frame.
+
+### Phase 3 — competitive controls and information design
+
+- [x] Add validated custom speed presets and a global speed-step setting used consistently by the
+      popup, overlay buttons, wheel control, manifest commands, and default shortcut values.
+- [x] Capture, render, persist, conflict-check, and execute complete shortcut chords including
+      Control, Alt, Shift, and Meta; keep modifier-only and browser-reserved combinations safe.
+- [x] Make the popup a compact current-video control surface and move advanced behavior,
+      appearance, shortcuts, rules, import/export, and diagnostics into a dedicated options page.
+- [x] Add play/pause and remaining wall-clock time at the current speed to the active controller
+      and compact popup, handling live/unknown-duration media gracefully.
+- [x] Add opt-in silence skipping with threshold, minimum-silence, and skip-speed settings; share
+      the audio graph with volume boost and preserve the user's desired playback speed.
+- [x] Translate the popup, options page, controller, context menu, feedback, accessibility labels,
+      and manifest/store metadata into `es`, `pt_BR`, `fr`, `de`, and `ja`; validate complete
+      catalogues and English fallback automatically.
+
+### Phase 4 — release verification and documentation
+
+- [x] Update README, privacy policy, testing guide, screenshots/feature copy, and settings schema
+      documentation for the new architecture and features.
+- [x] Run syntax/unit/integration/E2E checks, profile a no-media page and a 40-video stress page,
+      execute the real-site smoke matrix, and record measured results and known limitations below.
+- [x] Bump manifest/package version consistently, build the release archive, validate its contents,
+      and leave the worktree ready for an intentional commit/PR without publishing automatically.
+
+## Review
+
+Implemented on `codex/v1-6-full-improvements` after plan approval. The content runtime now owns
+one fixed closed-shadow controller portal per frame and never wraps or reparents page media.
+Active-media arbitration uses deterministic activity ordering, play state, visible area, and
+attachment order. Background dispatch always specifies a frame ID and retries the next ranked
+reporter instead of broadcasting.
+
+Settings are normalized once per frame, ordinary updates are broadcast as patches, and large
+collections migrate to bounded Chrome Sync chunks behind the unchanged import/export shape.
+Time-saved accounting writes at most every 30 seconds and flushes partial batches on lifecycle
+boundaries. Audio boost and opt-in silence skipping share one lazy AudioContext per frame.
+
+The action popup is now the compact current-video surface; the previous popup is the advanced
+options page. Custom presets/step, exact modifier chords, play/pause, speed-adjusted remaining
+time, silence controls, and complete `es`, `pt_BR`, `fr`, `de`, and `ja` catalogues are included.
+
+**Verification:** `npm run check` passes 21 unit/integration tests. The unpacked-extension E2E
+suite passes no-media, active selection, shortcut chord, speed-enforcement, open-shadow,
+hostile-CSS, 42-media, frame routing, popup, Sync chunk, batching, and cleanup cases. The recorded
+40-video next-frame delay was 10.0ms, the partial time-saved batch flushed 2.00s on pause, and the
+opt-in YouTube live-site smoke passed. Netflix/DRM behavior remains a signed-in manual check.
+
+**Known limits:** closed shadow roots and non-HTML/canvas players are unreachable. Silence analysis
+is intentionally disabled for protected or clearly cross-origin media. A Web Audio media source
+cannot be returned to the element's original direct output path, so the shared context stays live
+while any connected media is playing and is suspended only when all connected media is inactive.
+
+Release metadata and docs are updated to 1.6.0. The release ZIP is built and validated before the
+final commit; Chrome Web Store submission remains a separate signed-in publisher action.

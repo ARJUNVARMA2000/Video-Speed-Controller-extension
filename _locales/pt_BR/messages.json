@@ -1,0 +1,742 @@
+{
+  "a11y_add_allowed_site": {
+    "message": "Adicionar site permitido"
+  },
+  "a11y_add_blocked_site": {
+    "message": "Adicionar site bloqueado"
+  },
+  "a11y_add_intro_and_outro_rule": {
+    "message": "Adicionar regra de introdução e finalização"
+  },
+  "a11y_add_url_speed_rule": {
+    "message": "Adicionar regra de velocidade de URL"
+  },
+  "a11y_close_issue_report": {
+    "message": "Fechar relatório de problema"
+  },
+  "a11y_describe_the_issue_in_detail_what_were_y": {
+    "message": "Descreva o problema detalhadamente. O que você estava tentando fazer? O que aconteceu em vez disso?"
+  },
+  "a11y_domain_or_pattern_to_allow": {
+    "message": "Domínio ou padrão a ser permitido"
+  },
+  "a11y_domain_or_pattern_to_block": {
+    "message": "Domínio ou padrão para bloquear"
+  },
+  "a11y_enable_video_speed_controller": {
+    "message": "Ativar controlador de velocidade de vídeo"
+  },
+  "a11y_enter_domain_wildcard_or_regex": {
+    "message": "Insira domínio, curinga ou /regex/"
+  },
+  "a11y_intro": {
+    "message": "Introdução"
+  },
+  "a11y_intro_seconds": {
+    "message": "Segundos de introdução"
+  },
+  "a11y_outro": {
+    "message": "Outro"
+  },
+  "a11y_outro_seconds": {
+    "message": "Outros segundos"
+  },
+  "a11y_set_playback_speed": {
+    "message": "Definir velocidade de reprodução"
+  },
+  "a11y_set_speed_to_0_5_times": {
+    "message": "Defina a velocidade para 0,5 vezes"
+  },
+  "a11y_set_speed_to_0_75_times": {
+    "message": "Defina a velocidade para 0,75 vezes"
+  },
+  "a11y_set_speed_to_1_25_times": {
+    "message": "Defina a velocidade para 1,25 vezes"
+  },
+  "a11y_set_speed_to_1_5_times": {
+    "message": "Defina a velocidade para 1,5 vezes"
+  },
+  "a11y_set_speed_to_2_times": {
+    "message": "Defina a velocidade para 2 vezes"
+  },
+  "a11y_set_speed_to_3_times": {
+    "message": "Defina a velocidade para 3 vezes"
+  },
+  "a11y_set_speed_to_normal": {
+    "message": "Defina a velocidade para normal"
+  },
+  "a11y_site_e_g_youtube_com": {
+    "message": "Site (por exemplo, youtube.com)"
+  },
+  "a11y_site_for_intro_and_outro_rule": {
+    "message": "Site para regra de introdução e finalização"
+  },
+  "a11y_speed": {
+    "message": "Velocidade"
+  },
+  "a11y_url_pattern": {
+    "message": "Padrão de URL"
+  },
+  "a11y_url_pattern_e_g_shorts": {
+    "message": "Padrão de URL (por exemplo, /shorts)"
+  },
+  "a11y_url_rule_speed": {
+    "message": "Velocidade da regra de URL"
+  },
+  "appDesc": {
+    "message": "Acelere ou desacelere vídeos no YouTube, Netflix e qualquer site. Aumento de volume em 600%, capturas de tela, loop AB, filtros e teclas de atalho.",
+    "description": "Extension description shown in the store listing."
+  },
+  "appName": {
+    "message": "Video Speed Controller Pro",
+    "description": "Extension name shown in the store and browser UI."
+  },
+  "ui_a_b_loop": {
+    "message": "Loop AB"
+  },
+  "ui_access_mode": {
+    "message": "Modo de acesso"
+  },
+  "ui_add": {
+    "message": "Adicionar"
+  },
+  "ui_allow_all_block_list_or_allow_list": {
+    "message": "Permitir todos, lista de bloqueios ou lista de permissões"
+  },
+  "ui_allow_on_all_sites": {
+    "message": "Permitir em todos os sites"
+  },
+  "ui_allow_only_listed_sites": {
+    "message": "Permitir apenas sites listados"
+  },
+  "ui_appearance": {
+    "message": "Aparência"
+  },
+  "ui_auto_hide_timer": {
+    "message": "Temporizador de ocultação automática"
+  },
+  "ui_auto_skip_on_play": {
+    "message": "Pular automaticamente no jogo"
+  },
+  "ui_auto_skip_or_use_hotkeys": {
+    "message": "Ignorar automaticamente ou usar teclas de atalho"
+  },
+  "ui_automatically_skip_intros_and_outros_or": {
+    "message": "Pule introduções e encerramentos automaticamente ou use teclas de atalho para pular manualmente"
+  },
+  "ui_badge_colors": {
+    "message": "Cores do emblema"
+  },
+  "ui_behavior": {
+    "message": "Comportamento"
+  },
+  "ui_bg": {
+    "message": "GB"
+  },
+  "ui_block_listed_sites": {
+    "message": "Bloquear sites listados"
+  },
+  "ui_brightness_contrast_saturation": {
+    "message": "Brilho, contraste, saturação"
+  },
+  "ui_browser": {
+    "message": "Navegador:"
+  },
+  "ui_browser_sync": {
+    "message": "Sincronização do navegador"
+  },
+  "ui_capture_current_video_frame_p_key": {
+    "message": "Capturar o quadro de vídeo atual (tecla P)"
+  },
+  "ui_checking": {
+    "message": "Verificando…"
+  },
+  "ui_checking_2": {
+    "message": "Verificando..."
+  },
+  "ui_choose_display_style": {
+    "message": "Escolha o estilo de exibição"
+  },
+  "ui_control_audio_elements_too": {
+    "message": "Controle também os elementos de áudio"
+  },
+  "ui_controller_mode": {
+    "message": "Modo controlador"
+  },
+  "ui_controller_transparency": {
+    "message": "Transparência do controlador"
+  },
+  "ui_current_site": {
+    "message": "Site atual"
+  },
+  "ui_customize_overlay_colors": {
+    "message": "Personalize cores de sobreposição"
+  },
+  "ui_default_intro_skip": {
+    "message": "Pular introdução padrão"
+  },
+  "ui_default_outro_skip": {
+    "message": "Ignorar outro padrão"
+  },
+  "ui_enable_intro_outro_skip": {
+    "message": "Habilitar salto de introdução/final"
+  },
+  "ui_export": {
+    "message": "Exportar"
+  },
+  "ui_extension": {
+    "message": "Extensão:"
+  },
+  "ui_fade_after_inactivity_0_off": {
+    "message": "Desaparecer após inatividade (0 = desligado)"
+  },
+  "ui_force_saved_speed": {
+    "message": "Forçar velocidade salva"
+  },
+  "ui_full_panel": {
+    "message": "Completo (Painel)"
+  },
+  "ui_go_beyond_100_volume_up_to_600": {
+    "message": "Vá além de 100% do volume (até 600%)"
+  },
+  "ui_help_us_improve_describe_the_issue_you_e": {
+    "message": "Ajude-nos a melhorar! Descreva o problema que você encontrou."
+  },
+  "ui_hide_by_default": {
+    "message": "Ocultar por padrão"
+  },
+  "ui_import": {
+    "message": "Importar"
+  },
+  "ui_include_current_page_url": {
+    "message": "Incluir URL da página atual"
+  },
+  "ui_intro_outro_skip": {
+    "message": "Pular introdução/final"
+  },
+  "ui_keep_audio_pitch_when_changing_speed": {
+    "message": "Mantenha o tom do áudio ao alterar a velocidade"
+  },
+  "ui_keyboard_shortcuts": {
+    "message": "Atalhos de teclado"
+  },
+  "ui_loading": {
+    "message": "Carregando..."
+  },
+  "ui_loop_between_two_points_and_keys": {
+    "message": "Loop entre dois pontos (teclas [e])"
+  },
+  "ui_minimal_badge": {
+    "message": "Mínimo (crachá)"
+  },
+  "ui_new_features": {
+    "message": "Novos recursos"
+  },
+  "ui_off": {
+    "message": "Desligado"
+  },
+  "ui_opacity": {
+    "message": "Opacidade"
+  },
+  "ui_override_intro_outro_times_for_specific": {
+    "message": "Substituir tempos de introdução/final para sites específicos"
+  },
+  "ui_override_player_defaults": {
+    "message": "Substituir padrões do player"
+  },
+  "ui_per_site_rules": {
+    "message": "Regras por site"
+  },
+  "ui_pip_speed_indicator": {
+    "message": "Indicador de velocidade PiP"
+  },
+  "ui_platform": {
+    "message": "Plataforma:"
+  },
+  "ui_preserve_pitch": {
+    "message": "Preservar o campo"
+  },
+  "ui_press_shortcut_to_show": {
+    "message": "Pressione o atalho para mostrar"
+  },
+  "ui_press_to_skip_intro_manually": {
+    "message": "Pressione para pular a introdução manualmente"
+  },
+  "ui_press_to_skip_to_end_next": {
+    "message": "Pressione para pular para o final/próximo"
+  },
+  "ui_quick_speed": {
+    "message": "Velocidade rápida"
+  },
+  "ui_remember_filters": {
+    "message": "Lembre-se dos filtros"
+  },
+  "ui_remember_speed": {
+    "message": "Lembre-se da velocidade"
+  },
+  "ui_remember_volume_boost": {
+    "message": "Lembre-se do aumento de volume"
+  },
+  "ui_report_an_issue": {
+    "message": "Informar um problema"
+  },
+  "ui_reset": {
+    "message": "Reiniciar"
+  },
+  "ui_save_brightness_contrast_saturation_per": {
+    "message": "Salve brilho/contraste/saturação por site"
+  },
+  "ui_save_speed_per_website": {
+    "message": "Economize velocidade por site"
+  },
+  "ui_save_volume_boost_level_per_site": {
+    "message": "Salve o nível de aumento de volume por site"
+  },
+  "ui_screenshot": {
+    "message": "Captura de tela"
+  },
+  "ui_seconds_before_end_to_skip": {
+    "message": "Segundos antes do final para pular"
+  },
+  "ui_seconds_to_skip_at_start": {
+    "message": "Segundos para pular no início"
+  },
+  "ui_set_default_speeds_for_specific_url_patt": {
+    "message": "Defina velocidades padrão para padrões de URL específicos (por exemplo, \"/shorts\" = 1x)"
+  },
+  "ui_show_floating_controller_in_pip_mode": {
+    "message": "Mostrar controlador flutuante no modo PiP"
+  },
+  "ui_site_access": {
+    "message": "Acesso ao site"
+  },
+  "ui_skip_intro_automatically_when_video_star": {
+    "message": "Pular a introdução automaticamente quando o vídeo começar"
+  },
+  "ui_skip_intro_hotkey": {
+    "message": "Pular tecla de atalho de introdução"
+  },
+  "ui_skip_outro_hotkey": {
+    "message": "Pular outra tecla de atalho"
+  },
+  "ui_speed_controller": {
+    "message": "Controlador de velocidade"
+  },
+  "ui_system_information_auto_detected": {
+    "message": "Informações do sistema (detectadas automaticamente)"
+  },
+  "ui_text": {
+    "message": "Texto"
+  },
+  "ui_text_2": {
+    "message": "×"
+  },
+  "ui_these_features_are_available_in_the_on_v": {
+    "message": "Esses recursos estão disponíveis no painel do controlador de vídeo (modo completo):"
+  },
+  "ui_time_saved": {
+    "message": "Tempo economizado"
+  },
+  "ui_url_speed_rules": {
+    "message": "Regras de velocidade de URL"
+  },
+  "ui_video_filters": {
+    "message": "Filtros de vídeo"
+  },
+  "ui_volume_boost": {
+    "message": "Aumento de volume"
+  },
+  "ui_what_went_wrong": {
+    "message": "O que deu errado?"
+  },
+  "ui_work_on_audio": {
+    "message": "Trabalhar em áudio"
+  },
+  "ui_advanced_settings": {
+    "message": "Configurações avançadas"
+  },
+  "ui_playback_tuning": {
+    "message": "Ajuste de reprodução"
+  },
+  "ui_speed_step": {
+    "message": "Passo de velocidade"
+  },
+  "ui_speed_step_desc": {
+    "message": "Quantidade usada pelos comandos mais, menos, roda e navegador"
+  },
+  "ui_custom_presets": {
+    "message": "Predefinições personalizadas"
+  },
+  "ui_custom_presets_desc": {
+    "message": "Velocidades separadas por vírgula mostradas no pop-up e no controlador"
+  },
+  "ui_skip_silence": {
+    "message": "Pular silêncio"
+  },
+  "ui_skip_silence_desc": {
+    "message": "Avançar temporariamente seções silenciosas sustentadas"
+  },
+  "ui_silence_threshold": {
+    "message": "Limiar de silêncio"
+  },
+  "ui_silence_threshold_desc": {
+    "message": "Nível de áudio considerado silencioso"
+  },
+  "ui_minimum_silence": {
+    "message": "Silêncio mínimo"
+  },
+  "ui_minimum_silence_desc": {
+    "message": "Tempo de silêncio antes do início da aceleração"
+  },
+  "ui_silence_speed": {
+    "message": "Velocidade do silêncio"
+  },
+  "ui_silence_speed_desc": {
+    "message": "Taxa de reprodução temporária durante o silêncio"
+  },
+  "ui_play": {
+    "message": "Jogar"
+  },
+  "ui_pause": {
+    "message": "Pausa"
+  },
+  "ui_remaining": {
+    "message": "restante"
+  },
+  "ui_live_or_unknown_duration": {
+    "message": "Duração ao vivo ou desconhecida"
+  },
+  "ui_no_active_media": {
+    "message": "Nenhuma mídia ativa"
+  },
+  "ui_video_ready": {
+    "message": "Vídeo pronto"
+  },
+  "ui_controlling_active_video": {
+    "message": "Controlando vídeo ativo"
+  },
+  "ui_decrease_speed": {
+    "message": "Diminuir a velocidade de reprodução"
+  },
+  "ui_increase_speed": {
+    "message": "Aumentar a velocidade de reprodução"
+  },
+  "ui_speed": {
+    "message": "Velocidade"
+  },
+  "ui_seek_backward": {
+    "message": "Procure para trás"
+  },
+  "ui_seek_forward": {
+    "message": "Procure avançar"
+  },
+  "ui_pitch_correction": {
+    "message": "Correção de tom"
+  },
+  "ui_filters": {
+    "message": "Filtros"
+  },
+  "ui_reset_filters": {
+    "message": "Redefinir filtros"
+  },
+  "ui_not_set": {
+    "message": "Não definido"
+  },
+  "ui_normal": {
+    "message": "Normal"
+  },
+  "ui_open_video_page": {
+    "message": "Abra uma página com um vídeo HTML5."
+  },
+  "ui_on": {
+    "message": "SOBRE"
+  },
+  "ui_not_available": {
+    "message": "N / D"
+  },
+  "ui_pitch_correction_desc": {
+    "message": "Quando ativado, mantém o tom original. Quando desligado, o tom muda com a velocidade."
+  },
+  "ui_pitch_not_supported": {
+    "message": "A correção de tom não é suportada para esta mídia."
+  },
+  "ui_set_speed_to": {
+    "message": "Defina a velocidade para"
+  },
+  "ui_seconds": {
+    "message": "segundos"
+  },
+  "ui_previous_frame": {
+    "message": "Quadro anterior"
+  },
+  "ui_next_frame": {
+    "message": "Próximo quadro"
+  },
+  "ui_frame": {
+    "message": "Quadro"
+  },
+  "ui_set_loop_start": {
+    "message": "Definir início do loop"
+  },
+  "ui_set_loop_end": {
+    "message": "Definir fim do loop"
+  },
+  "ui_clear_loop": {
+    "message": "Ciclo claro"
+  },
+  "ui_video_brightness": {
+    "message": "Brilho do vídeo"
+  },
+  "ui_video_contrast": {
+    "message": "Contraste de vídeo"
+  },
+  "ui_video_saturation": {
+    "message": "Saturação de vídeo"
+  },
+  "ui_capture_screenshot": {
+    "message": "Capturar captura de tela"
+  },
+  "ui_video_only": {
+    "message": "Apenas vídeo"
+  },
+  "ui_video_not_ready": {
+    "message": "O vídeo não está pronto"
+  },
+  "ui_failed": {
+    "message": "Fracassado"
+  },
+  "ui_saved": {
+    "message": "Salvo!"
+  },
+  "ui_error": {
+    "message": "Erro"
+  },
+  "ui_loop_a": {
+    "message": "Laço A"
+  },
+  "ui_loop_b": {
+    "message": "Laço B"
+  },
+  "ui_active": {
+    "message": "Ativo"
+  },
+  "ui_cleared": {
+    "message": "Desmarcado"
+  },
+  "ui_set_a_b_first": {
+    "message": "Defina A e B primeiro"
+  },
+  "ui_paused": {
+    "message": "Pausado"
+  },
+  "ui_volume": {
+    "message": "Volume"
+  },
+  "ui_live": {
+    "message": "AO VIVO"
+  },
+  "ui_pip_speed": {
+    "message": "Velocidade PiP"
+  },
+  "ui_decrease_pip_speed": {
+    "message": "Diminuir a velocidade picture-in-picture"
+  },
+  "ui_reset_pip_speed": {
+    "message": "Redefinir a velocidade picture-in-picture"
+  },
+  "ui_increase_pip_speed": {
+    "message": "Aumente a velocidade de imagem em imagem"
+  },
+  "ui_key_for": {
+    "message": "Chave para"
+  },
+  "ui_value_for": {
+    "message": "Valor para"
+  },
+  "ui_enable": {
+    "message": "Habilitar"
+  },
+  "ui_remove": {
+    "message": "Remover"
+  },
+  "ui_remove_url_rule": {
+    "message": "Remover regra de URL"
+  },
+  "ui_remove_intro_outro_rule": {
+    "message": "Remover regra de introdução e finalização para"
+  },
+  "ui_unavailable": {
+    "message": "Indisponível"
+  },
+  "ui_unsupported_page": {
+    "message": "Página não suportada"
+  },
+  "ui_saved_label": {
+    "message": "Salvo"
+  },
+  "ui_using_browser_storage": {
+    "message": "Usando o armazenamento do navegador"
+  },
+  "ui_sync_unavailable": {
+    "message": "Status de sincronização indisponível"
+  },
+  "ui_just_now": {
+    "message": "Agora mesmo"
+  },
+  "ui_ago": {
+    "message": "atrás"
+  },
+  "notice_load_settings_failed": {
+    "message": "Não foi possível carregar as configurações da extensão"
+  },
+  "notice_open_video_for_quick_controls": {
+    "message": "Abra uma página com um vídeo HTML5 para usar controles rápidos de velocidade."
+  },
+  "notice_no_controllable_video": {
+    "message": "Nenhum vídeo controlável encontrado nesta página."
+  },
+  "notice_video_found_choose_speed": {
+    "message": "Vídeo encontrado — escolha uma velocidade."
+  },
+  "notice_reload_after_install": {
+    "message": "Atualize esta página uma vez após instalar a extensão."
+  },
+  "notice_speed_updated": {
+    "message": "Velocidade atualizada."
+  },
+  "notice_control_video_failed": {
+    "message": "Não foi possível controlar um vídeo nesta página."
+  },
+  "notice_enter_site": {
+    "message": "Por favor insira um site"
+  },
+  "notice_enter_intro_outro": {
+    "message": "Insira o horário da introdução ou do final"
+  },
+  "notice_site_rule_exists": {
+    "message": "A regra para este site já existe"
+  },
+  "notice_site_rule_added": {
+    "message": "Regra do site adicionada"
+  },
+  "notice_shortcut_reserved": {
+    "message": "Esse atalho do navegador está reservado"
+  },
+  "notice_shortcut_conflict": {
+    "message": "Chave já em uso por outro atalho"
+  },
+  "notice_invalid_regex": {
+    "message": "Padrão de expressão regular inválido"
+  },
+  "notice_pattern_exists": {
+    "message": "O padrão já existe"
+  },
+  "notice_site_blocked": {
+    "message": "Site adicionado à lista de bloqueio"
+  },
+  "notice_site_allowed": {
+    "message": "Site adicionado à lista de permissões"
+  },
+  "notice_enter_url_pattern": {
+    "message": "Insira um padrão de URL"
+  },
+  "notice_speed_range": {
+    "message": "A velocidade deve estar entre 0,1 e 16"
+  },
+  "notice_url_rule_exists": {
+    "message": "A regra para este padrão já existe"
+  },
+  "notice_url_rule_added": {
+    "message": "Regra de URL adicionada"
+  },
+  "notice_settings_exported": {
+    "message": "Configurações exportadas"
+  },
+  "notice_settings_export_failed": {
+    "message": "Não foi possível exportar as configurações"
+  },
+  "notice_settings_imported": {
+    "message": "Configurações importadas"
+  },
+  "notice_settings_import_failed": {
+    "message": "Falha ao importar configurações"
+  },
+  "notice_confirm_reset": {
+    "message": "Redefinir todas as configurações para os padrões?"
+  },
+  "notice_settings_reset": {
+    "message": "Configurações redefinidas para os padrões"
+  },
+  "notice_settings_reset_failed": {
+    "message": "Não foi possível redefinir as configurações"
+  },
+  "notice_saving": {
+    "message": "Salvando…"
+  },
+  "notice_saved_just_now": {
+    "message": "Salvo agora há pouco"
+  },
+  "notice_save_failed": {
+    "message": "Falha ao salvar"
+  },
+  "notice_settings_save_failed": {
+    "message": "Não foi possível salvar as configurações"
+  },
+  "notice_report_copied": {
+    "message": "Relatório copiado para a área de transferência!"
+  },
+  "notice_describe_issue": {
+    "message": "Descreva o problema"
+  },
+  "notice_opening_github": {
+    "message": "Abrindo problema do GitHub…"
+  },
+  "notice_github_not_configured": {
+    "message": "Repositório GitHub não configurado"
+  },
+  "notice_no_supported_tab": {
+    "message": "Nenhuma guia ativa suportada"
+  },
+  "shortcut_show_controller": {
+    "message": "Mostrar ou ocultar o controlador"
+  },
+  "shortcut_decrease_speed": {
+    "message": "Diminuir velocidade"
+  },
+  "shortcut_increase_speed": {
+    "message": "Aumentar a velocidade"
+  },
+  "shortcut_rewind": {
+    "message": "Retroceder"
+  },
+  "shortcut_advance": {
+    "message": "Avançar"
+  },
+  "shortcut_reset_speed": {
+    "message": "Redefinir velocidade"
+  },
+  "shortcut_preferred_speed": {
+    "message": "Segure para impulsionar"
+  },
+  "shortcut_frame_forward": {
+    "message": "Próximo quadro"
+  },
+  "shortcut_frame_backward": {
+    "message": "Quadro anterior"
+  },
+  "shortcut_screenshot": {
+    "message": "Captura de tela"
+  },
+  "shortcut_set_loop_a": {
+    "message": "Definir ciclo A"
+  },
+  "shortcut_set_loop_b": {
+    "message": "Definir ciclo B"
+  },
+  "shortcut_clear_loop": {
+    "message": "Ciclo claro"
+  },
+  "shortcut_toggle_loop": {
+    "message": "Alternar ciclo"
+  }
+}

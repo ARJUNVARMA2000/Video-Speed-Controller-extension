@@ -39,6 +39,35 @@ test('normalizeSettings supplies defaults and rejects malformed values', () => {
   // does not silently need the test edited to match.
   assert.deepEqual(settings.savedVolumeBoost, { 'example.com': VOLUME_BOOST_MAX });
   assert.equal(settings.shortcuts.length, 13);
+  assert.deepEqual(settings.speedPresets, [0.5, 0.75, 1, 1.25, 1.5, 2, 3]);
+  assert.equal(settings.speedStep, 0.1);
+  assert.equal(settings.silenceSkipEnabled, false);
+});
+
+test('custom presets, speed step, shortcut chords, and silence settings are bounded', () => {
+  const settings = normalizeSettings({
+    speedPresets: [3, 1, 1, 99, '0.25'],
+    speedStep: 9,
+    silenceSkipEnabled: true,
+    silenceThreshold: 0,
+    silenceMinDuration: 99,
+    silenceSkipSpeed: 99,
+    shortcuts: [{
+      action: 'increase-speed',
+      key: 'k',
+      modifiers: ['Meta', 'Shift', 'Control', 'Shift'],
+      value: 0.25,
+      enabled: true
+    }]
+  });
+
+  assert.deepEqual(settings.speedPresets, [0.25, 1, 3, 16]);
+  assert.equal(settings.speedStep, 2);
+  assert.equal(settings.silenceSkipEnabled, true);
+  assert.equal(settings.silenceThreshold, 0.001);
+  assert.equal(settings.silenceMinDuration, 10);
+  assert.equal(settings.silenceSkipSpeed, 16);
+  assert.deepEqual(settings.shortcuts.find(item => item.action === 'increase-speed').modifiers, ['Control', 'Shift', 'Meta']);
 });
 
 test('sanitizeSettingsPatch only returns recognized keys', () => {

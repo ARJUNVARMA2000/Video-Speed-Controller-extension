@@ -46,6 +46,11 @@
   pointer-events: none;
 }
 
+.vsc-controller.vsc-offscreen {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .vsc-controller:hover {
   opacity: 1 !important;
 }
@@ -133,6 +138,14 @@
   cursor: grab;
 }
 
+.vsc-remaining {
+  padding: 0 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .vsc-badge:active {
   cursor: grabbing;
 }
@@ -166,6 +179,17 @@
   justify-content: space-between;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vsc-play-pause {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--vsc-accent-color);
+  cursor: pointer;
 }
 
 .vsc-panel-title {

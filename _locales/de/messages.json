@@ -1,0 +1,742 @@
+{
+  "a11y_add_allowed_site": {
+    "message": "Erlaubte Site hinzufügen"
+  },
+  "a11y_add_blocked_site": {
+    "message": "Blockierte Site hinzufügen"
+  },
+  "a11y_add_intro_and_outro_rule": {
+    "message": "Fügen Sie die Intro- und Outro-Regel hinzu"
+  },
+  "a11y_add_url_speed_rule": {
+    "message": "URL-Geschwindigkeitsregel hinzufügen"
+  },
+  "a11y_close_issue_report": {
+    "message": "Problembericht schließen"
+  },
+  "a11y_describe_the_issue_in_detail_what_were_y": {
+    "message": "Beschreiben Sie das Problem im Detail. Was wolltest du tun? Was ist stattdessen passiert?"
+  },
+  "a11y_domain_or_pattern_to_allow": {
+    "message": "Zuzulassende Domäne oder Muster"
+  },
+  "a11y_domain_or_pattern_to_block": {
+    "message": "Zu blockierende Domäne oder Muster"
+  },
+  "a11y_enable_video_speed_controller": {
+    "message": "Aktivieren Sie den Videogeschwindigkeitscontroller"
+  },
+  "a11y_enter_domain_wildcard_or_regex": {
+    "message": "Geben Sie Domäne, Platzhalter oder /regex/ ein."
+  },
+  "a11y_intro": {
+    "message": "Einführung"
+  },
+  "a11y_intro_seconds": {
+    "message": "Intro-Sekunden"
+  },
+  "a11y_outro": {
+    "message": "Outro"
+  },
+  "a11y_outro_seconds": {
+    "message": "Outro-Sekunden"
+  },
+  "a11y_set_playback_speed": {
+    "message": "Wiedergabegeschwindigkeit einstellen"
+  },
+  "a11y_set_speed_to_0_5_times": {
+    "message": "Stellen Sie die Geschwindigkeit auf das 0,5-fache ein"
+  },
+  "a11y_set_speed_to_0_75_times": {
+    "message": "Stellen Sie die Geschwindigkeit auf das 0,75-fache ein"
+  },
+  "a11y_set_speed_to_1_25_times": {
+    "message": "Stellen Sie die Geschwindigkeit auf das 1,25-fache ein"
+  },
+  "a11y_set_speed_to_1_5_times": {
+    "message": "Stellen Sie die Geschwindigkeit auf das 1,5-fache ein"
+  },
+  "a11y_set_speed_to_2_times": {
+    "message": "Geschwindigkeit auf 2-fach einstellen"
+  },
+  "a11y_set_speed_to_3_times": {
+    "message": "Stellen Sie die Geschwindigkeit auf das Dreifache ein"
+  },
+  "a11y_set_speed_to_normal": {
+    "message": "Geschwindigkeit auf Normal stellen"
+  },
+  "a11y_site_e_g_youtube_com": {
+    "message": "Website (z. B. youtube.com)"
+  },
+  "a11y_site_for_intro_and_outro_rule": {
+    "message": "Site für Intro- und Outro-Regel"
+  },
+  "a11y_speed": {
+    "message": "Geschwindigkeit"
+  },
+  "a11y_url_pattern": {
+    "message": "URL-Muster"
+  },
+  "a11y_url_pattern_e_g_shorts": {
+    "message": "URL-Muster (z. B. /shorts)"
+  },
+  "a11y_url_rule_speed": {
+    "message": "Geschwindigkeit der URL-Regel"
+  },
+  "appDesc": {
+    "message": "Beschleunigen oder verlangsamen Sie Videos auf YouTube, Netflix und anderen Websites. Lautstärkeerhöhung um 600 %, Screenshots, A-B-Schleife, Filter und Hotkeys.",
+    "description": "Extension description shown in the store listing."
+  },
+  "appName": {
+    "message": "Video Speed Controller Pro",
+    "description": "Extension name shown in the store and browser UI."
+  },
+  "ui_a_b_loop": {
+    "message": "A-B-Schleife"
+  },
+  "ui_access_mode": {
+    "message": "Zugriffsmodus"
+  },
+  "ui_add": {
+    "message": "Hinzufügen"
+  },
+  "ui_allow_all_block_list_or_allow_list": {
+    "message": "Alle zulassen, Liste blockieren oder Liste zulassen"
+  },
+  "ui_allow_on_all_sites": {
+    "message": "Auf allen Websites zulassen"
+  },
+  "ui_allow_only_listed_sites": {
+    "message": "Nur aufgelistete Websites zulassen"
+  },
+  "ui_appearance": {
+    "message": "Aussehen"
+  },
+  "ui_auto_hide_timer": {
+    "message": "Timer zum automatischen Ausblenden"
+  },
+  "ui_auto_skip_on_play": {
+    "message": "Automatisches Überspringen beim Abspielen"
+  },
+  "ui_auto_skip_or_use_hotkeys": {
+    "message": "Automatisch überspringen oder Hotkeys verwenden"
+  },
+  "ui_automatically_skip_intros_and_outros_or": {
+    "message": "Überspringen Sie Intros und Outros automatisch oder verwenden Sie Hotkeys, um manuell zu überspringen"
+  },
+  "ui_badge_colors": {
+    "message": "Abzeichenfarben"
+  },
+  "ui_behavior": {
+    "message": "Verhalten"
+  },
+  "ui_bg": {
+    "message": "BG"
+  },
+  "ui_block_listed_sites": {
+    "message": "Blockieren Sie aufgelistete Websites"
+  },
+  "ui_brightness_contrast_saturation": {
+    "message": "Helligkeit, Kontrast, Sättigung"
+  },
+  "ui_browser": {
+    "message": "Browser:"
+  },
+  "ui_browser_sync": {
+    "message": "Browser-Synchronisierung"
+  },
+  "ui_capture_current_video_frame_p_key": {
+    "message": "Aktuelles Videobild aufnehmen (P-Taste)"
+  },
+  "ui_checking": {
+    "message": "Überprüfung…"
+  },
+  "ui_checking_2": {
+    "message": "Überprüfung..."
+  },
+  "ui_choose_display_style": {
+    "message": "Wählen Sie den Anzeigestil"
+  },
+  "ui_control_audio_elements_too": {
+    "message": "Steuern Sie auch Audioelemente"
+  },
+  "ui_controller_mode": {
+    "message": "Controller-Modus"
+  },
+  "ui_controller_transparency": {
+    "message": "Controller-Transparenz"
+  },
+  "ui_current_site": {
+    "message": "Aktuelle Seite"
+  },
+  "ui_customize_overlay_colors": {
+    "message": "Passen Sie die Overlay-Farben an"
+  },
+  "ui_default_intro_skip": {
+    "message": "Standardmäßiger Intro-Übersprung"
+  },
+  "ui_default_outro_skip": {
+    "message": "Standardmäßiger Outro-Übersprung"
+  },
+  "ui_enable_intro_outro_skip": {
+    "message": "Aktivieren Sie das Überspringen von Intro/Outro"
+  },
+  "ui_export": {
+    "message": "Export"
+  },
+  "ui_extension": {
+    "message": "Verlängerung:"
+  },
+  "ui_fade_after_inactivity_0_off": {
+    "message": "Ausblenden nach Inaktivität (0 = aus)"
+  },
+  "ui_force_saved_speed": {
+    "message": "Gespeicherte Geschwindigkeit erzwingen"
+  },
+  "ui_full_panel": {
+    "message": "Vollständig (Panel)"
+  },
+  "ui_go_beyond_100_volume_up_to_600": {
+    "message": "Gehen Sie über 100 % Lautstärke hinaus (bis zu 600 %)"
+  },
+  "ui_help_us_improve_describe_the_issue_you_e": {
+    "message": "Helfen Sie uns, uns zu verbessern! Beschreiben Sie das Problem, auf das Sie gestoßen sind."
+  },
+  "ui_hide_by_default": {
+    "message": "Standardmäßig ausblenden"
+  },
+  "ui_import": {
+    "message": "Import"
+  },
+  "ui_include_current_page_url": {
+    "message": "Geben Sie die aktuelle Seiten-URL an"
+  },
+  "ui_intro_outro_skip": {
+    "message": "Intro/Outro überspringen"
+  },
+  "ui_keep_audio_pitch_when_changing_speed": {
+    "message": "Behalten Sie die Tonhöhe bei, wenn Sie die Geschwindigkeit ändern"
+  },
+  "ui_keyboard_shortcuts": {
+    "message": "Tastaturkürzel"
+  },
+  "ui_loading": {
+    "message": "Laden..."
+  },
+  "ui_loop_between_two_points_and_keys": {
+    "message": "Schleife zwischen zwei Punkten (Tasten [ und ])"
+  },
+  "ui_minimal_badge": {
+    "message": "Minimal (Abzeichen)"
+  },
+  "ui_new_features": {
+    "message": "Neue Funktionen"
+  },
+  "ui_off": {
+    "message": "Aus"
+  },
+  "ui_opacity": {
+    "message": "Opazität"
+  },
+  "ui_override_intro_outro_times_for_specific": {
+    "message": "Überschreiben Sie die Intro-/Outro-Zeiten für bestimmte Websites"
+  },
+  "ui_override_player_defaults": {
+    "message": "Spieler-Standardeinstellungen überschreiben"
+  },
+  "ui_per_site_rules": {
+    "message": "Regeln pro Site"
+  },
+  "ui_pip_speed_indicator": {
+    "message": "PiP-Geschwindigkeitsanzeige"
+  },
+  "ui_platform": {
+    "message": "Plattform:"
+  },
+  "ui_preserve_pitch": {
+    "message": "Tonhöhe bewahren"
+  },
+  "ui_press_shortcut_to_show": {
+    "message": "Drücken Sie zum Anzeigen die Tastenkombination"
+  },
+  "ui_press_to_skip_intro_manually": {
+    "message": "Drücken Sie diese Taste, um die Einleitung manuell zu überspringen"
+  },
+  "ui_press_to_skip_to_end_next": {
+    "message": "Drücken Sie , um zum Ende/Weiter zu springen"
+  },
+  "ui_quick_speed": {
+    "message": "Schnelle Geschwindigkeit"
+  },
+  "ui_remember_filters": {
+    "message": "Denken Sie an Filter"
+  },
+  "ui_remember_speed": {
+    "message": "Denken Sie an Geschwindigkeit"
+  },
+  "ui_remember_volume_boost": {
+    "message": "Denken Sie an Volume Boost"
+  },
+  "ui_report_an_issue": {
+    "message": "Melden Sie ein Problem"
+  },
+  "ui_reset": {
+    "message": "Zurücksetzen"
+  },
+  "ui_save_brightness_contrast_saturation_per": {
+    "message": "Speichern Sie Helligkeit/Kontrast/Sättigung pro Standort"
+  },
+  "ui_save_speed_per_website": {
+    "message": "Sparen Sie Geschwindigkeit pro Website"
+  },
+  "ui_save_volume_boost_level_per_site": {
+    "message": "Speichern Sie die Lautstärke-Boost-Stufe pro Standort"
+  },
+  "ui_screenshot": {
+    "message": "Screenshot"
+  },
+  "ui_seconds_before_end_to_skip": {
+    "message": "Sekunden vor Ende zum Überspringen"
+  },
+  "ui_seconds_to_skip_at_start": {
+    "message": "Zu überspringende Sekunden beim Start"
+  },
+  "ui_set_default_speeds_for_specific_url_patt": {
+    "message": "Legen Sie Standardgeschwindigkeiten für bestimmte URL-Muster fest (z. B. „/shorts“ = 1x)"
+  },
+  "ui_show_floating_controller_in_pip_mode": {
+    "message": "Schwebender Controller im PiP-Modus anzeigen"
+  },
+  "ui_site_access": {
+    "message": "Site-Zugriff"
+  },
+  "ui_skip_intro_automatically_when_video_star": {
+    "message": "Überspringen Sie das Intro automatisch, wenn das Video startet"
+  },
+  "ui_skip_intro_hotkey": {
+    "message": "Hotkey „Intro überspringen“."
+  },
+  "ui_skip_outro_hotkey": {
+    "message": "Outro-Hotkey überspringen"
+  },
+  "ui_speed_controller": {
+    "message": "Geschwindigkeitsregler"
+  },
+  "ui_system_information_auto_detected": {
+    "message": "Systeminformationen (automatisch erkannt)"
+  },
+  "ui_text": {
+    "message": "Text"
+  },
+  "ui_text_2": {
+    "message": "×"
+  },
+  "ui_these_features_are_available_in_the_on_v": {
+    "message": "Diese Funktionen sind im On-Video-Controller-Panel verfügbar (Vollmodus):"
+  },
+  "ui_time_saved": {
+    "message": "Zeit gespart"
+  },
+  "ui_url_speed_rules": {
+    "message": "URL-Geschwindigkeitsregeln"
+  },
+  "ui_video_filters": {
+    "message": "Videofilter"
+  },
+  "ui_volume_boost": {
+    "message": "Lautstärke-Boost"
+  },
+  "ui_what_went_wrong": {
+    "message": "Was ist schief gelaufen?"
+  },
+  "ui_work_on_audio": {
+    "message": "Arbeite an Audio"
+  },
+  "ui_advanced_settings": {
+    "message": "Erweiterte Einstellungen"
+  },
+  "ui_playback_tuning": {
+    "message": "Wiedergabeabstimmung"
+  },
+  "ui_speed_step": {
+    "message": "Geschwindigkeitsstufe"
+  },
+  "ui_speed_step_desc": {
+    "message": "Von Plus-, Minus-, Rad- und Browserbefehlen verwendeter Betrag"
+  },
+  "ui_custom_presets": {
+    "message": "Benutzerdefinierte Voreinstellungen"
+  },
+  "ui_custom_presets_desc": {
+    "message": "Durch Kommas getrennte Geschwindigkeiten werden im Popup und im Controller angezeigt"
+  },
+  "ui_skip_silence": {
+    "message": "Überspringen Sie die Stille"
+  },
+  "ui_skip_silence_desc": {
+    "message": "Temporäres Vorspulen anhaltend ruhiger Abschnitte"
+  },
+  "ui_silence_threshold": {
+    "message": "Schweigeschwelle"
+  },
+  "ui_silence_threshold_desc": {
+    "message": "Audiopegel gilt als stumm"
+  },
+  "ui_minimum_silence": {
+    "message": "Minimale Stille"
+  },
+  "ui_minimum_silence_desc": {
+    "message": "Ruhige Zeit, bevor die Beschleunigung beginnt"
+  },
+  "ui_silence_speed": {
+    "message": "Stille Geschwindigkeit"
+  },
+  "ui_silence_speed_desc": {
+    "message": "Temporäre Wiedergaberate während der Stille"
+  },
+  "ui_play": {
+    "message": "Spielen"
+  },
+  "ui_pause": {
+    "message": "Pause"
+  },
+  "ui_remaining": {
+    "message": "übrig"
+  },
+  "ui_live_or_unknown_duration": {
+    "message": "Live oder unbekannte Dauer"
+  },
+  "ui_no_active_media": {
+    "message": "Keine aktiven Medien"
+  },
+  "ui_video_ready": {
+    "message": "Video fertig"
+  },
+  "ui_controlling_active_video": {
+    "message": "Aktives Video steuern"
+  },
+  "ui_decrease_speed": {
+    "message": "Verringern Sie die Wiedergabegeschwindigkeit"
+  },
+  "ui_increase_speed": {
+    "message": "Erhöhen Sie die Wiedergabegeschwindigkeit"
+  },
+  "ui_speed": {
+    "message": "Geschwindigkeit"
+  },
+  "ui_seek_backward": {
+    "message": "Rückwärts suchen"
+  },
+  "ui_seek_forward": {
+    "message": "Suchen Sie nach vorne"
+  },
+  "ui_pitch_correction": {
+    "message": "Tonhöhenkorrektur"
+  },
+  "ui_filters": {
+    "message": "Filter"
+  },
+  "ui_reset_filters": {
+    "message": "Filter zurücksetzen"
+  },
+  "ui_not_set": {
+    "message": "Nicht festgelegt"
+  },
+  "ui_normal": {
+    "message": "Normal"
+  },
+  "ui_open_video_page": {
+    "message": "Öffnen Sie eine Seite mit einem HTML5-Video."
+  },
+  "ui_on": {
+    "message": "AN"
+  },
+  "ui_not_available": {
+    "message": "N / A"
+  },
+  "ui_pitch_correction_desc": {
+    "message": "Wenn diese Option aktiviert ist, bleibt die ursprüngliche Tonhöhe erhalten. Im ausgeschalteten Zustand ändert sich die Tonhöhe mit der Geschwindigkeit."
+  },
+  "ui_pitch_not_supported": {
+    "message": "Die Tonhöhenkorrektur wird für dieses Medium nicht unterstützt."
+  },
+  "ui_set_speed_to": {
+    "message": "Geschwindigkeit einstellen auf"
+  },
+  "ui_seconds": {
+    "message": "Sekunden"
+  },
+  "ui_previous_frame": {
+    "message": "Vorheriger Frame"
+  },
+  "ui_next_frame": {
+    "message": "Nächster Frame"
+  },
+  "ui_frame": {
+    "message": "Rahmen"
+  },
+  "ui_set_loop_start": {
+    "message": "Schleifenstart festlegen"
+  },
+  "ui_set_loop_end": {
+    "message": "Schleifenende festlegen"
+  },
+  "ui_clear_loop": {
+    "message": "Klare Schleife"
+  },
+  "ui_video_brightness": {
+    "message": "Videohelligkeit"
+  },
+  "ui_video_contrast": {
+    "message": "Videokontrast"
+  },
+  "ui_video_saturation": {
+    "message": "Videosättigung"
+  },
+  "ui_capture_screenshot": {
+    "message": "Screenshot aufnehmen"
+  },
+  "ui_video_only": {
+    "message": "Nur Video"
+  },
+  "ui_video_not_ready": {
+    "message": "Video nicht bereit"
+  },
+  "ui_failed": {
+    "message": "Fehlgeschlagen"
+  },
+  "ui_saved": {
+    "message": "Gespeichert!"
+  },
+  "ui_error": {
+    "message": "Fehler"
+  },
+  "ui_loop_a": {
+    "message": "Schleife A"
+  },
+  "ui_loop_b": {
+    "message": "Schleife B"
+  },
+  "ui_active": {
+    "message": "Aktiv"
+  },
+  "ui_cleared": {
+    "message": "Gelöscht"
+  },
+  "ui_set_a_b_first": {
+    "message": "Stellen Sie zuerst A und B ein"
+  },
+  "ui_paused": {
+    "message": "Angehalten"
+  },
+  "ui_volume": {
+    "message": "Volumen"
+  },
+  "ui_live": {
+    "message": "LIVE"
+  },
+  "ui_pip_speed": {
+    "message": "PiP-Geschwindigkeit"
+  },
+  "ui_decrease_pip_speed": {
+    "message": "Verringern Sie die Bild-in-Bild-Geschwindigkeit"
+  },
+  "ui_reset_pip_speed": {
+    "message": "Bild-in-Bild-Geschwindigkeit zurücksetzen"
+  },
+  "ui_increase_pip_speed": {
+    "message": "Erhöhen Sie die Bild-in-Bild-Geschwindigkeit"
+  },
+  "ui_key_for": {
+    "message": "Schlüssel für"
+  },
+  "ui_value_for": {
+    "message": "Wert für"
+  },
+  "ui_enable": {
+    "message": "Aktivieren"
+  },
+  "ui_remove": {
+    "message": "Entfernen"
+  },
+  "ui_remove_url_rule": {
+    "message": "URL-Regel entfernen"
+  },
+  "ui_remove_intro_outro_rule": {
+    "message": "Entfernen Sie die Intro- und Outro-Regel für"
+  },
+  "ui_unavailable": {
+    "message": "Nicht verfügbar"
+  },
+  "ui_unsupported_page": {
+    "message": "Nicht unterstützte Seite"
+  },
+  "ui_saved_label": {
+    "message": "Gespeichert"
+  },
+  "ui_using_browser_storage": {
+    "message": "Verwendung des Browserspeichers"
+  },
+  "ui_sync_unavailable": {
+    "message": "Synchronisierungsstatus nicht verfügbar"
+  },
+  "ui_just_now": {
+    "message": "Soeben"
+  },
+  "ui_ago": {
+    "message": "vor"
+  },
+  "notice_load_settings_failed": {
+    "message": "Erweiterungseinstellungen konnten nicht geladen werden"
+  },
+  "notice_open_video_for_quick_controls": {
+    "message": "Öffnen Sie eine Seite mit einem HTML5-Video, um schnelle Geschwindigkeitskontrollen zu verwenden."
+  },
+  "notice_no_controllable_video": {
+    "message": "Auf dieser Seite wurde kein steuerbares Video gefunden."
+  },
+  "notice_video_found_choose_speed": {
+    "message": "Video gefunden – Geschwindigkeit auswählen."
+  },
+  "notice_reload_after_install": {
+    "message": "Laden Sie diese Seite nach der Installation der Erweiterung einmal neu."
+  },
+  "notice_speed_updated": {
+    "message": "Geschwindigkeit aktualisiert."
+  },
+  "notice_control_video_failed": {
+    "message": "Ein Video auf dieser Seite konnte nicht gesteuert werden."
+  },
+  "notice_enter_site": {
+    "message": "Bitte geben Sie eine Website ein"
+  },
+  "notice_enter_intro_outro": {
+    "message": "Bitte geben Sie die Intro- oder Outro-Zeit ein"
+  },
+  "notice_site_rule_exists": {
+    "message": "Die Regel für diese Site existiert bereits"
+  },
+  "notice_site_rule_added": {
+    "message": "Site-Regel hinzugefügt"
+  },
+  "notice_shortcut_reserved": {
+    "message": "Diese Browserverknüpfung ist reserviert"
+  },
+  "notice_shortcut_conflict": {
+    "message": "Taste wird bereits von einer anderen Tastenkombination verwendet"
+  },
+  "notice_invalid_regex": {
+    "message": "Ungültiges reguläres Ausdrucksmuster"
+  },
+  "notice_pattern_exists": {
+    "message": "Muster existiert bereits"
+  },
+  "notice_site_blocked": {
+    "message": "Website zur Sperrliste hinzugefügt"
+  },
+  "notice_site_allowed": {
+    "message": "Website zur Zulassungsliste hinzugefügt"
+  },
+  "notice_enter_url_pattern": {
+    "message": "Bitte geben Sie ein URL-Muster ein"
+  },
+  "notice_speed_range": {
+    "message": "Die Geschwindigkeit muss zwischen 0,1 und 16 liegen"
+  },
+  "notice_url_rule_exists": {
+    "message": "Die Regel für dieses Muster ist bereits vorhanden"
+  },
+  "notice_url_rule_added": {
+    "message": "URL-Regel hinzugefügt"
+  },
+  "notice_settings_exported": {
+    "message": "Einstellungen exportiert"
+  },
+  "notice_settings_export_failed": {
+    "message": "Die Einstellungen konnten nicht exportiert werden"
+  },
+  "notice_settings_imported": {
+    "message": "Einstellungen importiert"
+  },
+  "notice_settings_import_failed": {
+    "message": "Einstellungen konnten nicht importiert werden"
+  },
+  "notice_confirm_reset": {
+    "message": "Alle Einstellungen auf Standard zurücksetzen?"
+  },
+  "notice_settings_reset": {
+    "message": "Einstellungen auf Standardwerte zurückgesetzt"
+  },
+  "notice_settings_reset_failed": {
+    "message": "Die Einstellungen konnten nicht zurückgesetzt werden"
+  },
+  "notice_saving": {
+    "message": "Sparen…"
+  },
+  "notice_saved_just_now": {
+    "message": "Gerade erst gespeichert"
+  },
+  "notice_save_failed": {
+    "message": "Speichern fehlgeschlagen"
+  },
+  "notice_settings_save_failed": {
+    "message": "Einstellungen konnten nicht gespeichert werden"
+  },
+  "notice_report_copied": {
+    "message": "Bericht in die Zwischenablage kopiert!"
+  },
+  "notice_describe_issue": {
+    "message": "Bitte beschreiben Sie das Problem"
+  },
+  "notice_opening_github": {
+    "message": "GitHub-Ausgabe wird geöffnet…"
+  },
+  "notice_github_not_configured": {
+    "message": "GitHub-Repository nicht konfiguriert"
+  },
+  "notice_no_supported_tab": {
+    "message": "Keine unterstützte aktive Registerkarte"
+  },
+  "shortcut_show_controller": {
+    "message": "Controller ein- oder ausblenden"
+  },
+  "shortcut_decrease_speed": {
+    "message": "Geschwindigkeit verringern"
+  },
+  "shortcut_increase_speed": {
+    "message": "Geschwindigkeit erhöhen"
+  },
+  "shortcut_rewind": {
+    "message": "Zurückspulen"
+  },
+  "shortcut_advance": {
+    "message": "Vorauszahlung"
+  },
+  "shortcut_reset_speed": {
+    "message": "Geschwindigkeit zurücksetzen"
+  },
+  "shortcut_preferred_speed": {
+    "message": "Zum Boosten gedrückt halten"
+  },
+  "shortcut_frame_forward": {
+    "message": "Nächster Frame"
+  },
+  "shortcut_frame_backward": {
+    "message": "Vorheriger Frame"
+  },
+  "shortcut_screenshot": {
+    "message": "Screenshot"
+  },
+  "shortcut_set_loop_a": {
+    "message": "Legen Sie Schleife A fest"
+  },
+  "shortcut_set_loop_b": {
+    "message": "Legen Sie Schleife B fest"
+  },
+  "shortcut_clear_loop": {
+    "message": "Klare Schleife"
+  },
+  "shortcut_toggle_loop": {
+    "message": "Schleife umschalten"
+  }
+}

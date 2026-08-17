@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "default_locale": "en",
   "description": "__MSG_appDesc__",
   "icons": {
@@ -14,13 +14,17 @@
     "activeTab"
   ],
   "action": {
-    "default_popup": "popup/popup.html",
+    "default_popup": "popup/compact.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
     "default_title": "Video Speed Pro"
+  },
+  "options_ui": {
+    "page": "popup/popup.html",
+    "open_in_tab": true
   },
   "background": {
     "service_worker": "background/service-worker.js"

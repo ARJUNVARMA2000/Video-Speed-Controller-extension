@@ -134,6 +134,67 @@
     </div>
   </section>
 
+  <!-- Playback Tuning Section -->
+  <section class="section">
+    <h2 class="section-title"><span data-i18n="ui_playback_tuning">Playback Tuning</span></h2>
+    <div class="settings-list">
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name" data-i18n="ui_speed_step">Speed step</span>
+          <span class="setting-desc" data-i18n="ui_speed_step_desc">Amount used by +/−, wheel, and browser commands</span>
+        </div>
+        <div class="number-input-wrapper">
+          <input type="number" class="number-input" id="speedStep" min="0.05" max="2" step="0.05" value="0.1">
+          <span class="number-unit">×</span>
+        </div>
+      </div>
+      <div class="setting-item setting-item-stacked">
+        <div class="setting-label">
+          <label class="setting-name" for="speedPresets" data-i18n="ui_custom_presets">Custom presets</label>
+          <span class="setting-desc" data-i18n="ui_custom_presets_desc">Comma-separated speeds shown in the popup and controller</span>
+        </div>
+        <input type="text" class="blacklist-input" id="speedPresets" placeholder="0.5, 0.75, 1, 1.25, 1.5, 2, 3">
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name" data-i18n="ui_skip_silence">Skip silence</span>
+          <span class="setting-desc" data-i18n="ui_skip_silence_desc">Temporarily fast-forward sustained quiet sections</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="silenceSkipEnabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name" data-i18n="ui_silence_threshold">Silence threshold</span>
+          <span class="setting-desc" data-i18n="ui_silence_threshold_desc">Audio level considered silent</span>
+        </div>
+        <input type="number" class="number-input" id="silenceThreshold" min="0.001" max="0.2" step="0.001" value="0.02">
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name" data-i18n="ui_minimum_silence">Minimum silence</span>
+          <span class="setting-desc" data-i18n="ui_minimum_silence_desc">Quiet time before acceleration begins</span>
+        </div>
+        <div class="number-input-wrapper">
+          <input type="number" class="number-input" id="silenceMinDuration" min="0.2" max="10" step="0.1" value="1">
+          <span class="number-unit">s</span>
+        </div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">
+          <span class="setting-name" data-i18n="ui_silence_speed">Silence speed</span>
+          <span class="setting-desc" data-i18n="ui_silence_speed_desc">Temporary playback rate during silence</span>
+        </div>
+        <div class="number-input-wrapper">
+          <input type="number" class="number-input" id="silenceSkipSpeed" min="1.5" max="16" step="0.25" value="4">
+          <span class="number-unit">×</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Controller Appearance Section -->
   <section class="section">
     <h2 class="section-title">

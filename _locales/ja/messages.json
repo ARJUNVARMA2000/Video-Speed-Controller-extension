@@ -1,0 +1,742 @@
+{
+  "a11y_add_allowed_site": {
+    "message": "許可されたサイトを追加"
+  },
+  "a11y_add_blocked_site": {
+    "message": "ブロックされたサイトを追加する"
+  },
+  "a11y_add_intro_and_outro_rule": {
+    "message": "イントロとアウトロのルールを追加する"
+  },
+  "a11y_add_url_speed_rule": {
+    "message": "URL速度ルールを追加する"
+  },
+  "a11y_close_issue_report": {
+    "message": "問題レポートを閉じる"
+  },
+  "a11y_describe_the_issue_in_detail_what_were_y": {
+    "message": "問題を詳しく説明してください。何をしようとしていたのですか？代わりに何が起こったのでしょうか？"
+  },
+  "a11y_domain_or_pattern_to_allow": {
+    "message": "許可するドメインまたはパターン"
+  },
+  "a11y_domain_or_pattern_to_block": {
+    "message": "ブロックするドメインまたはパターン"
+  },
+  "a11y_enable_video_speed_controller": {
+    "message": "ビデオスピードコントローラーを有効にする"
+  },
+  "a11y_enter_domain_wildcard_or_regex": {
+    "message": "ドメイン、ワイルドカード、または /regex/ を入力してください"
+  },
+  "a11y_intro": {
+    "message": "イントロ"
+  },
+  "a11y_intro_seconds": {
+    "message": "イントロ秒"
+  },
+  "a11y_outro": {
+    "message": "アウトロ"
+  },
+  "a11y_outro_seconds": {
+    "message": "アウトロ秒"
+  },
+  "a11y_set_playback_speed": {
+    "message": "再生速度を設定する"
+  },
+  "a11y_set_speed_to_0_5_times": {
+    "message": "速度を0.5倍に設定"
+  },
+  "a11y_set_speed_to_0_75_times": {
+    "message": "速度を0.75倍に設定"
+  },
+  "a11y_set_speed_to_1_25_times": {
+    "message": "速度を1.25倍に設定します"
+  },
+  "a11y_set_speed_to_1_5_times": {
+    "message": "速度を1.5倍に設定します"
+  },
+  "a11y_set_speed_to_2_times": {
+    "message": "速度を2倍に設定"
+  },
+  "a11y_set_speed_to_3_times": {
+    "message": "速度を3倍に設定"
+  },
+  "a11y_set_speed_to_normal": {
+    "message": "速度を通常に設定します"
+  },
+  "a11y_site_e_g_youtube_com": {
+    "message": "サイト (例: youtube.com)"
+  },
+  "a11y_site_for_intro_and_outro_rule": {
+    "message": "イントロとアウトロのルールに関するサイト"
+  },
+  "a11y_speed": {
+    "message": "スピード"
+  },
+  "a11y_url_pattern": {
+    "message": "URLパターン"
+  },
+  "a11y_url_pattern_e_g_shorts": {
+    "message": "URL パターン (例: /shorts)"
+  },
+  "a11y_url_rule_speed": {
+    "message": "URL ルールの速度"
+  },
+  "appDesc": {
+    "message": "YouTube、Netflix、その他のサイトのビデオを高速化または低速化します。音量600%ブースト、スクリーンショット、A-Bループ、フィルター、ホットキー。",
+    "description": "Extension description shown in the store listing."
+  },
+  "appName": {
+    "message": "Video Speed Controller Pro",
+    "description": "Extension name shown in the store and browser UI."
+  },
+  "ui_a_b_loop": {
+    "message": "A-B ループ"
+  },
+  "ui_access_mode": {
+    "message": "アクセスモード"
+  },
+  "ui_add": {
+    "message": "追加"
+  },
+  "ui_allow_all_block_list_or_allow_list": {
+    "message": "すべて許可、ブロックリスト、または許可リスト"
+  },
+  "ui_allow_on_all_sites": {
+    "message": "すべてのサイトで許可する"
+  },
+  "ui_allow_only_listed_sites": {
+    "message": "リストされたサイトのみを許可する"
+  },
+  "ui_appearance": {
+    "message": "外観"
+  },
+  "ui_auto_hide_timer": {
+    "message": "自動非表示タイマー"
+  },
+  "ui_auto_skip_on_play": {
+    "message": "再生時の自動スキップ"
+  },
+  "ui_auto_skip_or_use_hotkeys": {
+    "message": "自動スキップまたはホットキーの使用"
+  },
+  "ui_automatically_skip_intros_and_outros_or": {
+    "message": "イントロとアウトロを自動的にスキップするか、ホットキーを使用して手動でスキップします"
+  },
+  "ui_badge_colors": {
+    "message": "バッジの色"
+  },
+  "ui_behavior": {
+    "message": "行動"
+  },
+  "ui_bg": {
+    "message": "BG"
+  },
+  "ui_block_listed_sites": {
+    "message": "ブロックリストに登録されたサイト"
+  },
+  "ui_brightness_contrast_saturation": {
+    "message": "明るさ、コントラスト、彩度"
+  },
+  "ui_browser": {
+    "message": "ブラウザ："
+  },
+  "ui_browser_sync": {
+    "message": "ブラウザ同期"
+  },
+  "ui_capture_current_video_frame_p_key": {
+    "message": "現在のビデオ フレームをキャプチャ (P キー)"
+  },
+  "ui_checking": {
+    "message": "チェック中…"
+  },
+  "ui_checking_2": {
+    "message": "チェック中..."
+  },
+  "ui_choose_display_style": {
+    "message": "表示スタイルの選択"
+  },
+  "ui_control_audio_elements_too": {
+    "message": "オーディオ要素もコントロール"
+  },
+  "ui_controller_mode": {
+    "message": "コントローラーモード"
+  },
+  "ui_controller_transparency": {
+    "message": "コントローラーの透明性"
+  },
+  "ui_current_site": {
+    "message": "現在のサイト"
+  },
+  "ui_customize_overlay_colors": {
+    "message": "オーバーレイの色をカスタマイズする"
+  },
+  "ui_default_intro_skip": {
+    "message": "デフォルトのイントロスキップ"
+  },
+  "ui_default_outro_skip": {
+    "message": "デフォルトのアウトロスキップ"
+  },
+  "ui_enable_intro_outro_skip": {
+    "message": "イントロ/アウトロのスキップを有効にする"
+  },
+  "ui_export": {
+    "message": "輸出"
+  },
+  "ui_extension": {
+    "message": "拡大："
+  },
+  "ui_fade_after_inactivity_0_off": {
+    "message": "非アクティブ後のフェード (0 = オフ)"
+  },
+  "ui_force_saved_speed": {
+    "message": "強制的に保存された速度"
+  },
+  "ui_full_panel": {
+    "message": "フル（パネル）"
+  },
+  "ui_go_beyond_100_volume_up_to_600": {
+    "message": "100% を超えるボリューム (最大 600%)"
+  },
+  "ui_help_us_improve_describe_the_issue_you_e": {
+    "message": "改善にご協力ください!発生した問題について説明してください。"
+  },
+  "ui_hide_by_default": {
+    "message": "デフォルトで非表示にする"
+  },
+  "ui_import": {
+    "message": "輸入"
+  },
+  "ui_include_current_page_url": {
+    "message": "現在のページの URL を含める"
+  },
+  "ui_intro_outro_skip": {
+    "message": "イントロ/アウトロスキップ"
+  },
+  "ui_keep_audio_pitch_when_changing_speed": {
+    "message": "速度を変更してもオーディオのピッチを維持する"
+  },
+  "ui_keyboard_shortcuts": {
+    "message": "キーボードショートカット"
+  },
+  "ui_loading": {
+    "message": "読み込み中..."
+  },
+  "ui_loop_between_two_points_and_keys": {
+    "message": "2 点間のループ ([ および ] キー)"
+  },
+  "ui_minimal_badge": {
+    "message": "ミニマル（バッジ）"
+  },
+  "ui_new_features": {
+    "message": "新機能"
+  },
+  "ui_off": {
+    "message": "オフ"
+  },
+  "ui_opacity": {
+    "message": "不透明度"
+  },
+  "ui_override_intro_outro_times_for_specific": {
+    "message": "特定のサイトのイントロ/アウトロ時間を上書きする"
+  },
+  "ui_override_player_defaults": {
+    "message": "プレーヤーのデフォルトを上書きする"
+  },
+  "ui_per_site_rules": {
+    "message": "サイトごとのルール"
+  },
+  "ui_pip_speed_indicator": {
+    "message": "PiP 速度インジケーター"
+  },
+  "ui_platform": {
+    "message": "プラットフォーム:"
+  },
+  "ui_preserve_pitch": {
+    "message": "ピッチを維持する"
+  },
+  "ui_press_shortcut_to_show": {
+    "message": "ショートカットを押して表示します"
+  },
+  "ui_press_to_skip_intro_manually": {
+    "message": "を押してイントロを手動でスキップします"
+  },
+  "ui_press_to_skip_to_end_next": {
+    "message": "押すと最後/次へスキップします"
+  },
+  "ui_quick_speed": {
+    "message": "クイックスピード"
+  },
+  "ui_remember_filters": {
+    "message": "フィルターを記憶する"
+  },
+  "ui_remember_speed": {
+    "message": "スピードを忘れないでください"
+  },
+  "ui_remember_volume_boost": {
+    "message": "ボリュームブーストを忘れないでください"
+  },
+  "ui_report_an_issue": {
+    "message": "問題を報告する"
+  },
+  "ui_reset": {
+    "message": "リセット"
+  },
+  "ui_save_brightness_contrast_saturation_per": {
+    "message": "サイトごとに明るさ/コントラスト/彩度を保存"
+  },
+  "ui_save_speed_per_website": {
+    "message": "ウェブサイトごとの速度を節約"
+  },
+  "ui_save_volume_boost_level_per_site": {
+    "message": "サイトごとにボリュームブーストレベルを保存"
+  },
+  "ui_screenshot": {
+    "message": "スクリーンショット"
+  },
+  "ui_seconds_before_end_to_skip": {
+    "message": "スキップするには終了の数秒前に"
+  },
+  "ui_seconds_to_skip_at_start": {
+    "message": "開始時にスキップする秒数"
+  },
+  "ui_set_default_speeds_for_specific_url_patt": {
+    "message": "特定の URL パターンのデフォルト速度を設定します (例: \"/shorts\" = 1x)"
+  },
+  "ui_show_floating_controller_in_pip_mode": {
+    "message": "PiP モードでフローティング コントローラーを表示する"
+  },
+  "ui_site_access": {
+    "message": "サイトアクセス"
+  },
+  "ui_skip_intro_automatically_when_video_star": {
+    "message": "ビデオの開始時にイントロを自動的にスキップする"
+  },
+  "ui_skip_intro_hotkey": {
+    "message": "イントロをスキップするホットキー"
+  },
+  "ui_skip_outro_hotkey": {
+    "message": "アウトロをスキップするホットキー"
+  },
+  "ui_speed_controller": {
+    "message": "スピードコントローラー"
+  },
+  "ui_system_information_auto_detected": {
+    "message": "システム情報 (自動検出)"
+  },
+  "ui_text": {
+    "message": "文章"
+  },
+  "ui_text_2": {
+    "message": "×"
+  },
+  "ui_these_features_are_available_in_the_on_v": {
+    "message": "これらの機能は、オンビデオ コントローラー パネル (フル モード) で利用できます。"
+  },
+  "ui_time_saved": {
+    "message": "時間の節約"
+  },
+  "ui_url_speed_rules": {
+    "message": "URL 速度ルール"
+  },
+  "ui_video_filters": {
+    "message": "ビデオフィルター"
+  },
+  "ui_volume_boost": {
+    "message": "ボリュームブースト"
+  },
+  "ui_what_went_wrong": {
+    "message": "何が間違っていたのでしょうか?"
+  },
+  "ui_work_on_audio": {
+    "message": "オーディオに関する作業"
+  },
+  "ui_advanced_settings": {
+    "message": "詳細設定"
+  },
+  "ui_playback_tuning": {
+    "message": "再生チューニング"
+  },
+  "ui_speed_step": {
+    "message": "速度ステップ"
+  },
+  "ui_speed_step_desc": {
+    "message": "プラス、マイナス、ホイール、ブラウザのコマンドで使用される量"
+  },
+  "ui_custom_presets": {
+    "message": "カスタムプリセット"
+  },
+  "ui_custom_presets_desc": {
+    "message": "ポップアップとコントローラーに表示されるカンマ区切りの速度"
+  },
+  "ui_skip_silence": {
+    "message": "沈黙をスキップする"
+  },
+  "ui_skip_silence_desc": {
+    "message": "持続的な静かなセクションを一時的に早送りします"
+  },
+  "ui_silence_threshold": {
+    "message": "沈黙の閾値"
+  },
+  "ui_silence_threshold_desc": {
+    "message": "静音とみなされる音声レベル"
+  },
+  "ui_minimum_silence": {
+    "message": "最小限の静音性"
+  },
+  "ui_minimum_silence_desc": {
+    "message": "加速が始まる前の静かな時間"
+  },
+  "ui_silence_speed": {
+    "message": "沈黙の速度"
+  },
+  "ui_silence_speed_desc": {
+    "message": "無音時の一時再生速度"
+  },
+  "ui_play": {
+    "message": "遊ぶ"
+  },
+  "ui_pause": {
+    "message": "一時停止"
+  },
+  "ui_remaining": {
+    "message": "残り"
+  },
+  "ui_live_or_unknown_duration": {
+    "message": "ライブまたは不明な期間"
+  },
+  "ui_no_active_media": {
+    "message": "アクティブなメディアがありません"
+  },
+  "ui_video_ready": {
+    "message": "ビデオの準備ができました"
+  },
+  "ui_controlling_active_video": {
+    "message": "アクティブビデオの制御"
+  },
+  "ui_decrease_speed": {
+    "message": "再生速度を下げる"
+  },
+  "ui_increase_speed": {
+    "message": "再生速度を上げる"
+  },
+  "ui_speed": {
+    "message": "スピード"
+  },
+  "ui_seek_backward": {
+    "message": "逆方向にシークする"
+  },
+  "ui_seek_forward": {
+    "message": "前を向く"
+  },
+  "ui_pitch_correction": {
+    "message": "ピッチ補正"
+  },
+  "ui_filters": {
+    "message": "フィルター"
+  },
+  "ui_reset_filters": {
+    "message": "フィルターをリセットする"
+  },
+  "ui_not_set": {
+    "message": "未設定"
+  },
+  "ui_normal": {
+    "message": "普通"
+  },
+  "ui_open_video_page": {
+    "message": "HTML5 ビデオのあるページを開きます。"
+  },
+  "ui_on": {
+    "message": "の上"
+  },
+  "ui_not_available": {
+    "message": "該当なし"
+  },
+  "ui_pitch_correction_desc": {
+    "message": "オンにすると、元のピッチが維持されます。オフにすると、速度に応じてピッチが変化します。"
+  },
+  "ui_pitch_not_supported": {
+    "message": "このメディアではピッチ補正はサポートされていません。"
+  },
+  "ui_set_speed_to": {
+    "message": "速度を次のように設定します"
+  },
+  "ui_seconds": {
+    "message": "秒"
+  },
+  "ui_previous_frame": {
+    "message": "前のフレーム"
+  },
+  "ui_next_frame": {
+    "message": "次のフレーム"
+  },
+  "ui_frame": {
+    "message": "フレーム"
+  },
+  "ui_set_loop_start": {
+    "message": "ループ開始の設定"
+  },
+  "ui_set_loop_end": {
+    "message": "ループエンドを設定する"
+  },
+  "ui_clear_loop": {
+    "message": "クリアループ"
+  },
+  "ui_video_brightness": {
+    "message": "ビデオの明るさ"
+  },
+  "ui_video_contrast": {
+    "message": "ビデオコントラスト"
+  },
+  "ui_video_saturation": {
+    "message": "ビデオの飽和"
+  },
+  "ui_capture_screenshot": {
+    "message": "スクリーンショットをキャプチャする"
+  },
+  "ui_video_only": {
+    "message": "ビデオのみ"
+  },
+  "ui_video_not_ready": {
+    "message": "ビデオの準備ができていません"
+  },
+  "ui_failed": {
+    "message": "失敗した"
+  },
+  "ui_saved": {
+    "message": "保存しました！"
+  },
+  "ui_error": {
+    "message": "エラー"
+  },
+  "ui_loop_a": {
+    "message": "ループA"
+  },
+  "ui_loop_b": {
+    "message": "ループB"
+  },
+  "ui_active": {
+    "message": "アクティブ"
+  },
+  "ui_cleared": {
+    "message": "クリア済み"
+  },
+  "ui_set_a_b_first": {
+    "message": "AとBを最初に設定します"
+  },
+  "ui_paused": {
+    "message": "一時停止中"
+  },
+  "ui_volume": {
+    "message": "音量"
+  },
+  "ui_live": {
+    "message": "ライブ"
+  },
+  "ui_pip_speed": {
+    "message": "PiP 速度"
+  },
+  "ui_decrease_pip_speed": {
+    "message": "ピクチャーインピクチャーの速度を下げる"
+  },
+  "ui_reset_pip_speed": {
+    "message": "ピクチャーインピクチャー速度をリセットする"
+  },
+  "ui_increase_pip_speed": {
+    "message": "ピクチャーインピクチャーの速度を上げる"
+  },
+  "ui_key_for": {
+    "message": "のキー"
+  },
+  "ui_value_for": {
+    "message": "の価値"
+  },
+  "ui_enable": {
+    "message": "有効にする"
+  },
+  "ui_remove": {
+    "message": "取り除く"
+  },
+  "ui_remove_url_rule": {
+    "message": "URL ルールを削除する"
+  },
+  "ui_remove_intro_outro_rule": {
+    "message": "～のイントロとアウトロのルールを削除する"
+  },
+  "ui_unavailable": {
+    "message": "利用不可"
+  },
+  "ui_unsupported_page": {
+    "message": "サポートされていないページ"
+  },
+  "ui_saved_label": {
+    "message": "保存されました"
+  },
+  "ui_using_browser_storage": {
+    "message": "ブラウザストレージの使用"
+  },
+  "ui_sync_unavailable": {
+    "message": "同期ステータスが利用不可"
+  },
+  "ui_just_now": {
+    "message": "ちょうど今"
+  },
+  "ui_ago": {
+    "message": "前"
+  },
+  "notice_load_settings_failed": {
+    "message": "拡張機能の設定を読み込めませんでした"
+  },
+  "notice_open_video_for_quick_controls": {
+    "message": "クイック速度制御を使用するには、HTML5 ビデオを含むページを開きます。"
+  },
+  "notice_no_controllable_video": {
+    "message": "このページには制御可能なビデオが見つかりません。"
+  },
+  "notice_video_found_choose_speed": {
+    "message": "ビデオが見つかりました — 速度を選択してください。"
+  },
+  "notice_reload_after_install": {
+    "message": "拡張機能をインストールした後、このページを一度リロードします。"
+  },
+  "notice_speed_updated": {
+    "message": "速度が更新されました。"
+  },
+  "notice_control_video_failed": {
+    "message": "このページでビデオを制御できませんでした。"
+  },
+  "notice_enter_site": {
+    "message": "サイトを入力してください"
+  },
+  "notice_enter_intro_outro": {
+    "message": "イントロまたはアウトロの時間を入力してください"
+  },
+  "notice_site_rule_exists": {
+    "message": "このサイトのルールはすでに存在します"
+  },
+  "notice_site_rule_added": {
+    "message": "サイトルールが追加されました"
+  },
+  "notice_shortcut_reserved": {
+    "message": "そのブラウザのショートカットは予約されています"
+  },
+  "notice_shortcut_conflict": {
+    "message": "キーは別のショートカットによってすでに使用されています"
+  },
+  "notice_invalid_regex": {
+    "message": "無効な正規表現パターンです"
+  },
+  "notice_pattern_exists": {
+    "message": "パターンはすでに存在します"
+  },
+  "notice_site_blocked": {
+    "message": "サイトがブロックリストに追加されました"
+  },
+  "notice_site_allowed": {
+    "message": "サイトが許可リストに追加されました"
+  },
+  "notice_enter_url_pattern": {
+    "message": "URL パターンを入力してください"
+  },
+  "notice_speed_range": {
+    "message": "速度は 0.1 ～ 16 でなければなりません"
+  },
+  "notice_url_rule_exists": {
+    "message": "このパターンのルールはすでに存在します"
+  },
+  "notice_url_rule_added": {
+    "message": "URLルールが追加されました"
+  },
+  "notice_settings_exported": {
+    "message": "設定がエクスポートされました"
+  },
+  "notice_settings_export_failed": {
+    "message": "設定をエクスポートできませんでした"
+  },
+  "notice_settings_imported": {
+    "message": "インポートされた設定"
+  },
+  "notice_settings_import_failed": {
+    "message": "設定のインポートに失敗しました"
+  },
+  "notice_confirm_reset": {
+    "message": "すべての設定をデフォルトにリセットしますか?"
+  },
+  "notice_settings_reset": {
+    "message": "設定がデフォルトにリセットされる"
+  },
+  "notice_settings_reset_failed": {
+    "message": "設定をリセットできませんでした"
+  },
+  "notice_saving": {
+    "message": "保存中…"
+  },
+  "notice_saved_just_now": {
+    "message": "たった今保存しました"
+  },
+  "notice_save_failed": {
+    "message": "保存に失敗しました"
+  },
+  "notice_settings_save_failed": {
+    "message": "設定を保存できませんでした"
+  },
+  "notice_report_copied": {
+    "message": "レポートがクリップボードにコピーされました!"
+  },
+  "notice_describe_issue": {
+    "message": "問題について説明してください"
+  },
+  "notice_opening_github": {
+    "message": "GitHub の問題を開いています…"
+  },
+  "notice_github_not_configured": {
+    "message": "GitHub リポジトリが構成されていません"
+  },
+  "notice_no_supported_tab": {
+    "message": "サポートされているアクティブなタブはありません"
+  },
+  "shortcut_show_controller": {
+    "message": "コントローラーの表示または非表示"
+  },
+  "shortcut_decrease_speed": {
+    "message": "速度を下げる"
+  },
+  "shortcut_increase_speed": {
+    "message": "速度を上げる"
+  },
+  "shortcut_rewind": {
+    "message": "巻き戻し"
+  },
+  "shortcut_advance": {
+    "message": "前進"
+  },
+  "shortcut_reset_speed": {
+    "message": "リセット速度"
+  },
+  "shortcut_preferred_speed": {
+    "message": "長押ししてブーストする"
+  },
+  "shortcut_frame_forward": {
+    "message": "次のフレーム"
+  },
+  "shortcut_frame_backward": {
+    "message": "前のフレーム"
+  },
+  "shortcut_screenshot": {
+    "message": "スクリーンショット"
+  },
+  "shortcut_set_loop_a": {
+    "message": "セットループA"
+  },
+  "shortcut_set_loop_b": {
+    "message": "セットループB"
+  },
+  "shortcut_clear_loop": {
+    "message": "クリアループ"
+  },
+  "shortcut_toggle_loop": {
+    "message": "トグルループ"
+  }
+}

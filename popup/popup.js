@@ -20,6 +20,8 @@
     'clear-loop': 'Clear Loop',
     'toggle-loop': 'Toggle Loop'
   };
+  const ACTION_LABEL_KEYS = Object.fromEntries(Object.keys(ACTION_LABELS)
+    .map(action => [action, `shortcut_${action.replaceAll('-', '_')}`]));
 
   // Value units for display
   const VALUE_UNITS = {
@@ -39,6 +41,18 @@
   let currentHostname = null;
   let currentTabId = null;
   let lastFocusedElement = null;
+
+  function t(key, fallback) {
+    try {
+      return chrome.i18n?.getMessage?.(key) || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function actionLabel(action) {
+    return t(ACTION_LABEL_KEYS[action], ACTION_LABELS[action] || action);
+  }
 
   // DOM Elements
   const elements = {
@@ -97,6 +111,12 @@
     // New feature settings
     rememberFilters: document.getElementById('rememberFilters'),
     rememberVolumeBoost: document.getElementById('rememberVolumeBoost'),
+    speedStep: document.getElementById('speedStep'),
+    speedPresets: document.getElementById('speedPresets'),
+    silenceSkipEnabled: document.getElementById('silenceSkipEnabled'),
+    silenceThreshold: document.getElementById('silenceThreshold'),
+    silenceMinDuration: document.getElementById('silenceMinDuration'),
+    silenceSkipSpeed: document.getElementById('silenceSkipSpeed'),
     // Feedback modal elements
     btnFeedback: document.getElementById('btn-feedback'),
     feedbackModal: document.getElementById('feedback-modal'),
@@ -154,8 +174,8 @@
       await loadActiveSite();
     } catch (error) {
       console.error('Video Speed Pro: Popup initialization failed', error);
-      showNotification('Could not load extension settings', 'error');
-      if (elements.currentSite) elements.currentSite.textContent = 'Unavailable';
+      showNotification(t('notice_load_settings_failed', 'Could not load extension settings'), 'error');
+      if (elements.currentSite) elements.currentSite.textContent = t('ui_unavailable', 'Unavailable');
       setSpeedControlsEnabled(false);
     }
   }
@@ -163,9 +183,9 @@
   async function loadActiveSite() {
     currentHostname = null;
     currentTabId = null;
-    if (elements.currentSite) elements.currentSite.textContent = 'Unsupported page';
+    if (elements.currentSite) elements.currentSite.textContent = t('ui_unsupported_page', 'Unsupported page');
     if (elements.currentSpeed) elements.currentSpeed.textContent = '—';
-    setSiteMessage('Open a page with an HTML5 video to use quick speed controls.');
+    setSiteMessage(t('notice_open_video_for_quick_controls', 'Open a page with an HTML5 video to use quick speed controls.'));
     setSpeedControlsEnabled(false);
 
     try {
@@ -205,14 +225,16 @@
     try {
       const state = await sendToActiveFrame({ type: 'getActiveState' });
       if (!state?.found) {
-        setSiteMessage('No controllable video found on this page.');
+        setSiteMessage(t('notice_no_controllable_video', 'No controllable video found on this page.'));
         return;
       }
       setSpeedControlsEnabled(true);
       setCurrentSpeed(state.speed);
-      setSiteMessage(state.paused ? 'Video found — choose a speed.' : 'Controlling the active video.');
+      setSiteMessage(state.paused
+        ? t('notice_video_found_choose_speed', 'Video found — choose a speed.')
+        : t('ui_controlling_active_video', 'Controlling the active video.'));
     } catch {
-      setSiteMessage('Reload this page once after installing the extension.');
+      setSiteMessage(t('notice_reload_after_install', 'Reload this page once after installing the extension.'));
     }
   }
 
@@ -264,7 +286,7 @@
     // Auto-hide delay
     const autoHide = settings.autoHideDelay || 0;
     elements.autoHideDelay.value = autoHide;
-    elements.autoHideDelayValue.textContent = autoHide === 0 ? 'Off' : autoHide + 's';
+    elements.autoHideDelayValue.textContent = autoHide === 0 ? t('ui_off', 'Off') : autoHide + 's';
 
     // Color pickers
     elements.colorBackground.value = settings.colorBackground || '#1a1a2e';
@@ -308,14 +330,28 @@
     if (elements.rememberVolumeBoost) {
       elements.rememberVolumeBoost.checked = settings.rememberVolumeBoost === true;
     }
+    if (elements.speedStep) elements.speedStep.value = settings.speedStep || 0.1;
+    if (elements.speedPresets) elements.speedPresets.value = (settings.speedPresets || []).join(', ');
+    if (elements.silenceSkipEnabled) elements.silenceSkipEnabled.checked = settings.silenceSkipEnabled === true;
+    if (elements.silenceThreshold) elements.silenceThreshold.value = settings.silenceThreshold || 0.02;
+    if (elements.silenceMinDuration) elements.silenceMinDuration.value = settings.silenceMinDuration || 1;
+    if (elements.silenceSkipSpeed) elements.silenceSkipSpeed.value = settings.silenceSkipSpeed || 4;
 
 
+    renderSpeedPresets();
     renderShortcuts();
     renderBlacklist();
     renderWhitelist();
     updateSiteAccessVisibility();
     renderUrlRules();
     renderIntroOutroRules();
+  }
+
+  function renderSpeedPresets() {
+    if (!elements.speedPresetsBar) return;
+    elements.speedPresetsBar.innerHTML = (settings.speedPresets || []).map(speed =>
+      `<button class="speed-preset-btn" data-speed="${speed}" aria-label="${t('ui_set_speed_to', 'Set speed to')} ${speed}x">${speed}x</button>`
+    ).join('');
   }
 
   // Update sync status display
@@ -327,13 +363,13 @@
       elements.syncStatus.classList.remove('synced');
       if (response.lastSyncTime) {
         const date = new Date(response.lastSyncTime);
-        elements.syncTime.textContent = `Saved ${getTimeAgo(date).toLowerCase()}`;
+        elements.syncTime.textContent = `${t('ui_saved_label', 'Saved')} ${getTimeAgo(date).toLowerCase()}`;
         elements.syncStatus.classList.add('synced');
       } else {
-        elements.syncTime.textContent = 'Using browser storage';
+        elements.syncTime.textContent = t('ui_using_browser_storage', 'Using browser storage');
       }
     } catch {
-      elements.syncTime.textContent = 'Sync status unavailable';
+      elements.syncTime.textContent = t('ui_sync_unavailable', 'Sync status unavailable');
     }
   }
 
@@ -347,9 +383,9 @@
   function getTimeAgo(date) {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
     
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 60) return t('ui_just_now', 'Just now');
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${t('ui_ago', 'ago')}`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${t('ui_ago', 'ago')}`;
     return date.toLocaleDateString();
   }
 
@@ -372,21 +408,30 @@
   }
 
   // Render shortcuts list
+  function formatShortcut(shortcut) {
+    return [...(shortcut.modifiers || []), shortcut.key].join('+');
+  }
+
+  function modifierSignature(modifiers) {
+    const order = ['Control', 'Alt', 'Shift', 'Meta'];
+    return order.filter(modifier => (modifiers || []).includes(modifier)).join('+');
+  }
+
   function renderShortcuts() {
     const shortcuts = settings.shortcuts || [];
     elements.shortcutsList.innerHTML = shortcuts.map((shortcut, index) => `
       <div class="shortcut-item" data-index="${index}">
-        <span class="shortcut-action">${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}</span>
+        <span class="shortcut-action">${escapeHtml(actionLabel(shortcut.action))}</span>
         <div class="shortcut-key">
-          <input type="text" class="key-input" data-field="key" value="${escapeHtml(shortcut.key)}" aria-label="Key for ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}" readonly>
+          <input type="text" class="key-input" data-field="key" value="${escapeHtml(formatShortcut(shortcut))}" aria-label="${escapeHtml(t('ui_key_for', 'Key for'))} ${escapeHtml(actionLabel(shortcut.action))}" readonly>
         </div>
         ${VALUE_UNITS[shortcut.action] ? `
           <div class="shortcut-value">
-            <input type="number" class="value-input" data-field="value" value="${shortcut.value || ''}" step="0.1" min="0.1" aria-label="Value for ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}">
+            <input type="number" class="value-input" data-field="value" value="${shortcut.value || ''}" step="0.1" min="0.1" aria-label="${escapeHtml(t('ui_value_for', 'Value for'))} ${escapeHtml(actionLabel(shortcut.action))}">
           </div>
         ` : '<div class="shortcut-value"></div>'}
         <label class="toggle-switch shortcut-toggle">
-          <input type="checkbox" data-field="enabled" aria-label="Enable ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}" ${shortcut.enabled !== false ? 'checked' : ''}>
+          <input type="checkbox" data-field="enabled" aria-label="${escapeHtml(t('ui_enable', 'Enable'))} ${escapeHtml(actionLabel(shortcut.action))}" ${shortcut.enabled !== false ? 'checked' : ''}>
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -399,7 +444,7 @@
     elements.blacklistList.innerHTML = blacklist.map((pattern, index) => `
       <div class="blacklist-item" data-index="${index}">
         <span>${escapeHtml(pattern)}</span>
-        <button class="blacklist-remove" data-index="${index}" aria-label="Remove ${escapeHtml(pattern)}">&times;</button>
+        <button class="blacklist-remove" data-index="${index}" aria-label="${escapeHtml(t('ui_remove', 'Remove'))} ${escapeHtml(pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -411,7 +456,7 @@
     elements.whitelistList.innerHTML = whitelist.map((pattern, index) => `
       <div class="blacklist-item" data-index="${index}">
         <span>${escapeHtml(pattern)}</span>
-        <button class="blacklist-remove" data-index="${index}" aria-label="Remove ${escapeHtml(pattern)}">&times;</button>
+        <button class="blacklist-remove" data-index="${index}" aria-label="${escapeHtml(t('ui_remove', 'Remove'))} ${escapeHtml(pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -438,7 +483,7 @@
           <span class="url-rule-item-pattern">${escapeHtml(rule.pattern)}</span>
           <span class="url-rule-item-speed">${rule.speed}x</span>
         </div>
-        <button class="url-rule-remove" data-index="${index}" aria-label="Remove URL rule ${escapeHtml(rule.pattern)}">&times;</button>
+        <button class="url-rule-remove" data-index="${index}" aria-label="${escapeHtml(t('ui_remove_url_rule', 'Remove URL rule'))} ${escapeHtml(rule.pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -457,7 +502,7 @@
             <span class="intro-outro-rule-outro">${rule.outro}s</span>
           </div>
         </div>
-        <button class="intro-outro-rule-remove" data-index="${index}" aria-label="Remove intro and outro rule for ${escapeHtml(rule.site)}">&times;</button>
+        <button class="intro-outro-rule-remove" data-index="${index}" aria-label="${escapeHtml(t('ui_remove_intro_outro_rule', 'Remove intro and outro rule for'))} ${escapeHtml(rule.site)}">&times;</button>
       </div>
     `).join('');
   }
@@ -471,12 +516,33 @@
     });
 
     // Simple toggles
-    ['hideByDefault', 'rememberSpeed', 'forceSpeed', 'workOnAudio', 'preservePitch', 'rememberFilters', 'rememberVolumeBoost'].forEach(id => {
+    ['hideByDefault', 'rememberSpeed', 'forceSpeed', 'workOnAudio', 'preservePitch', 'rememberFilters', 'rememberVolumeBoost', 'silenceSkipEnabled'].forEach(id => {
       if (!elements[id]) return;
       elements[id].addEventListener('change', () => {
         settings[id] = elements[id].checked;
         saveSettings();
       });
+    });
+
+    ['speedStep', 'silenceThreshold', 'silenceMinDuration', 'silenceSkipSpeed'].forEach(id => {
+      elements[id]?.addEventListener('change', () => {
+        const normalized = VSCSettings.normalizeSettings({ ...settings, [id]: Number(elements[id].value) });
+        settings[id] = normalized[id];
+        elements[id].value = normalized[id];
+        saveSettings();
+      });
+    });
+    elements.speedPresets?.addEventListener('change', () => {
+      settings.speedPresets = elements.speedPresets.value
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map(Number)
+        .filter(Number.isFinite);
+      const normalized = VSCSettings.normalizeSettings(settings);
+      settings.speedPresets = normalized.speedPresets;
+      elements.speedPresets.value = normalized.speedPresets.join(', ');
+      renderSpeedPresets();
+      saveSettings();
     });
 
     // PiP indicator toggle
@@ -513,7 +579,7 @@
     // Auto-hide delay
     elements.autoHideDelay.addEventListener('input', () => {
       const value = parseInt(elements.autoHideDelay.value);
-      elements.autoHideDelayValue.textContent = value === 0 ? 'Off' : value + 's';
+      elements.autoHideDelayValue.textContent = value === 0 ? t('ui_off', 'Off') : value + 's';
       settings.autoHideDelay = value;
       saveSettings();
     });
@@ -541,9 +607,9 @@
         const response = await sendToActiveFrame({ type: 'setSpeed', speed });
         if (!response?.success) throw new Error(response?.error || 'No active video');
         setCurrentSpeed(response.speed);
-        setSiteMessage('Speed updated.');
+        setSiteMessage(t('notice_speed_updated', 'Speed updated.'));
       } catch {
-        setSiteMessage('Could not control a video on this page.', 'error');
+        setSiteMessage(t('notice_control_video_failed', 'Could not control a video on this page.'), 'error');
       }
     });
 
@@ -692,12 +758,12 @@
     const outro = parseInt(elements.introOutroOutro.value) || 0;
 
     if (!site) {
-      showNotification('Please enter a site', 'error');
+      showNotification(t('notice_enter_site', 'Please enter a site'), 'error');
       return;
     }
 
     if (intro === 0 && outro === 0) {
-      showNotification('Please enter intro or outro time', 'error');
+      showNotification(t('notice_enter_intro_outro', 'Please enter intro or outro time'), 'error');
       return;
     }
 
@@ -705,7 +771,7 @@
     settings.introOutroSiteRules = settings.introOutroSiteRules || [];
     const exists = settings.introOutroSiteRules.some(r => r.site.toLowerCase() === site.toLowerCase());
     if (exists) {
-      showNotification('Rule for this site already exists', 'error');
+      showNotification(t('notice_site_rule_exists', 'Rule for this site already exists'), 'error');
       return;
     }
 
@@ -715,7 +781,7 @@
     elements.introOutroOutro.value = '';
     renderIntroOutroRules();
     saveSettings();
-    showNotification('Site rule added', 'success');
+    showNotification(t('notice_site_rule_added', 'Site rule added'), 'success');
   }
 
   // Handle intro/outro rule click (remove)
@@ -781,24 +847,40 @@
 
     const index = parseInt(recordingInput.closest('.shortcut-item').dataset.index);
     const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    const modifiers = [];
+    if (e.ctrlKey) modifiers.push('Control');
+    if (e.altKey) modifiers.push('Alt');
+    if (e.shiftKey) modifiers.push('Shift');
+    if (e.metaKey) modifiers.push('Meta');
+    const reserved = (e.metaKey && ['Q', 'W', 'T'].includes(key)) ||
+      (e.ctrlKey && ['L', 'N', 'T', 'W'].includes(key));
+    if (reserved) {
+      showNotification(t('notice_shortcut_reserved', 'That browser shortcut is reserved'), 'error');
+      recordingInput.classList.remove('recording');
+      recordingInput.value = formatShortcut(settings.shortcuts[index]);
+      recordingInput = null;
+      return;
+    }
 
     // Check for conflicts
     const conflict = settings.shortcuts.find((s, i) =>
-      i !== index && s.enabled && s.key.toUpperCase() === key.toUpperCase()
+      i !== index && s.enabled && s.key.toUpperCase() === key.toUpperCase() &&
+      modifierSignature(s.modifiers) === modifierSignature(modifiers)
     );
 
     if (conflict) {
-      showNotification('Key already in use by another shortcut', 'error');
+      showNotification(t('notice_shortcut_conflict', 'Key already in use by another shortcut'), 'error');
       recordingInput.classList.remove('recording');
-      recordingInput.value = settings.shortcuts[index].key;
+      recordingInput.value = formatShortcut(settings.shortcuts[index]);
       recordingInput = null;
       return;
     }
 
     // Update shortcut
     settings.shortcuts[index].key = key;
+    settings.shortcuts[index].modifiers = modifiers;
     recordingInput.classList.remove('recording');
-    recordingInput.value = key;
+    recordingInput.value = formatShortcut(settings.shortcuts[index]);
     recordingInput = null;
     saveSettings();
   }
@@ -838,14 +920,14 @@
       try {
         new RegExp(pattern.replace(/^\/?(.+)\/?$/, '$1'));
       } catch (e) {
-        showNotification('Invalid regex pattern', 'error');
+        showNotification(t('notice_invalid_regex', 'Invalid regex pattern'), 'error');
         return;
       }
     }
 
     // Check for duplicates
     if (settings.blacklist?.includes(pattern)) {
-      showNotification('Pattern already exists', 'error');
+      showNotification(t('notice_pattern_exists', 'Pattern already exists'), 'error');
       return;
     }
 
@@ -854,7 +936,7 @@
     elements.blacklistInput.value = '';
     renderBlacklist();
     saveSettings();
-    showNotification('Site added to blacklist', 'success');
+    showNotification(t('notice_site_blocked', 'Site added to block list'), 'success');
   }
 
   // Handle blacklist item click (remove)
@@ -878,14 +960,14 @@
       try {
         new RegExp(pattern.replace(/^\/?(.+)\/?$/, '$1'));
       } catch (e) {
-        showNotification('Invalid regex pattern', 'error');
+        showNotification(t('notice_invalid_regex', 'Invalid regex pattern'), 'error');
         return;
       }
     }
 
     // Check for duplicates
     if (settings.whitelist?.includes(pattern)) {
-      showNotification('Pattern already exists', 'error');
+      showNotification(t('notice_pattern_exists', 'Pattern already exists'), 'error');
       return;
     }
 
@@ -894,7 +976,7 @@
     elements.whitelistInput.value = '';
     renderWhitelist();
     saveSettings();
-    showNotification('Site added to allowlist', 'success');
+    showNotification(t('notice_site_allowed', 'Site added to allow list'), 'success');
   }
 
   // Handle whitelist item click (remove)
@@ -915,12 +997,12 @@
     const speed = parseFloat(elements.urlRuleSpeed.value);
 
     if (!pattern) {
-      showNotification('Please enter a URL pattern', 'error');
+      showNotification(t('notice_enter_url_pattern', 'Please enter a URL pattern'), 'error');
       return;
     }
 
     if (isNaN(speed) || speed < 0.1 || speed > 16) {
-      showNotification('Speed must be between 0.1 and 16', 'error');
+      showNotification(t('notice_speed_range', 'Speed must be between 0.1 and 16'), 'error');
       return;
     }
 
@@ -928,7 +1010,7 @@
     settings.urlRules = settings.urlRules || [];
     const exists = settings.urlRules.some(r => r.pattern === pattern);
     if (exists) {
-      showNotification('Rule for this pattern already exists', 'error');
+      showNotification(t('notice_url_rule_exists', 'Rule for this pattern already exists'), 'error');
       return;
     }
 
@@ -937,7 +1019,7 @@
     elements.urlRuleSpeed.value = '1';
     renderUrlRules();
     saveSettings();
-    showNotification('URL rule added', 'success');
+    showNotification(t('notice_url_rule_added', 'URL rule added'), 'success');
   }
 
   // Handle URL rule click (remove)
@@ -965,9 +1047,9 @@
       a.click();
 
       URL.revokeObjectURL(url);
-      showNotification('Settings exported', 'success');
+      showNotification(t('notice_settings_exported', 'Settings exported'), 'success');
     } catch {
-      showNotification('Could not export settings', 'error');
+      showNotification(t('notice_settings_export_failed', 'Could not export settings'), 'error');
     }
   }
 
@@ -992,9 +1074,9 @@
       settings = { ...persistedSettings, timeSaved: Number(response.settings?.timeSaved) || 0 };
       await loadActiveSite();
       applySettingsToUI();
-      showNotification('Settings imported', 'success');
+      showNotification(t('notice_settings_imported', 'Settings imported'), 'success');
     } catch (error) {
-      showNotification('Failed to import settings', 'error');
+      showNotification(t('notice_settings_import_failed', 'Failed to import settings'), 'error');
     }
 
     // Reset input
@@ -1003,7 +1085,7 @@
 
   // Reset settings
   async function resetSettings() {
-    if (!confirm('Reset all settings to defaults?')) return;
+    if (!confirm(t('notice_confirm_reset', 'Reset all settings to defaults?'))) return;
 
     try {
       await saveQueue;
@@ -1013,9 +1095,9 @@
       settings = { ...persistedSettings, timeSaved: 0 };
       await loadActiveSite();
       applySettingsToUI();
-      showNotification('Settings reset to defaults', 'success');
+      showNotification(t('notice_settings_reset', 'Settings reset to defaults'), 'success');
     } catch {
-      showNotification('Could not reset settings', 'error');
+      showNotification(t('notice_settings_reset_failed', 'Could not reset settings'), 'error');
     }
   }
 
@@ -1026,7 +1108,7 @@
       const updates = VSCSettings.diffSettings(persistedSettings, requestSnapshot);
       if (Object.keys(updates).length === 0) return;
 
-      setSaveState('Saving…');
+      setSaveState(t('notice_saving', 'Saving…'));
       const response = await chrome.runtime.sendMessage({ type: 'updateSettings', updates });
       if (!response?.success) throw new Error(response?.error || 'Save failed');
 
@@ -1040,13 +1122,13 @@
         if (!Object.prototype.hasOwnProperty.call(locallyChangedAfterRequest, key)) settings[key] = value;
       }
       persistedSettings = serverSettings;
-      setSaveState('Saved just now', true);
+      setSaveState(t('notice_saved_just_now', 'Saved just now'), true);
     });
 
     saveQueue = operation.catch(error => {
       console.error('Video Speed Pro: Settings save failed', error);
-      setSaveState('Save failed');
-      showNotification('Settings could not be saved', 'error');
+      setSaveState(t('notice_save_failed', 'Save failed'));
+      showNotification(t('notice_settings_save_failed', 'Settings could not be saved'), 'error');
     });
     return saveQueue;
   }
@@ -1182,7 +1264,7 @@
     
     try {
       await navigator.clipboard.writeText(report);
-      showNotification('Report copied to clipboard!', 'success');
+      showNotification(t('notice_report_copied', 'Report copied to clipboard!'), 'success');
       closeFeedbackModal();
     } catch (e) {
       // Fallback for older browsers
@@ -1194,7 +1276,7 @@
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      showNotification('Report copied to clipboard!', 'success');
+      showNotification(t('notice_report_copied', 'Report copied to clipboard!'), 'success');
       closeFeedbackModal();
     }
   }
@@ -1205,7 +1287,7 @@
     const description = elements.feedbackDescription.value.trim();
     
     if (!description) {
-      showNotification('Please describe the issue', 'error');
+      showNotification(t('notice_describe_issue', 'Please describe the issue'), 'error');
       elements.feedbackDescription.focus();
       return;
     }
@@ -1230,10 +1312,10 @@
     if (githubRepo) {
       const issueUrl = `${githubRepo}/issues/new?title=${title}&body=${body}`;
       window.open(issueUrl, '_blank');
-      showNotification('Opening GitHub issue...', 'success');
+      showNotification(t('notice_opening_github', 'Opening GitHub issue...'), 'success');
       closeFeedbackModal();
     } else {
-      showNotification('GitHub repository not configured', 'error');
+      showNotification(t('notice_github_not_configured', 'GitHub repository not configured'), 'error');
     }
   }
 

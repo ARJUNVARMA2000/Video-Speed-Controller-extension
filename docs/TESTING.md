@@ -2,97 +2,82 @@
 
 ## Automated checks
 
-Run before every package or store upload:
+Install the test runtime once, then run both suites before packaging:
 
 ```bash
+npm install
+npx playwright install chromium
 npm run check
+npm run test:e2e
 ```
 
-This validates JavaScript syntax, manifest structure and referenced assets, settings normalization, site and URL matching, targeted settings patches, message handling, and concurrent per-site storage writes.
+`npm run check` validates JavaScript syntax, manifest assets, all locale catalogues, settings
+normalization, Sync quota/chunk migration, serialized writes, and targeted frame routing.
 
-## Local Chrome smoke test
+`npm run test:e2e` launches Chromium with the unpacked extension and verifies:
 
-1. Open `chrome://extensions` and enable **Developer mode**.
-2. Choose **Load unpacked** and select the repository root.
-3. Run `npm run test:manual` and open `http://127.0.0.1:4173/media.html`.
-4. Reload the test page once after loading or reloading the extension.
-5. Confirm one controller appears for the initial video.
-6. Use the popup presets and confirm its current-speed readout changes.
-7. Use the overlay increase, decrease, reset, seek, frame, screenshot, filter, volume, and A–B loop controls.
-8. Add the dynamic video and confirm a second controller appears without a page reload.
-9. Remove the dynamic video and confirm its controller and media state disappear.
-10. Disable and re-enable the extension from the popup; confirm controllers disappear and return without a page reload.
-11. Change controller mode repeatedly; confirm one click changes speed by exactly one step.
-12. Add literal, wildcard, and explicit `/regex/` URL rules and verify first-match precedence.
-13. Export settings, import them again, and verify the popup reports success.
-14. Open the service worker and page consoles and confirm no unexpected errors appear.
+- no controller/CSS portal on a page without media;
+- one fixed closed-shadow portal for the active media, with no wrappers or media reparenting;
+- dynamic and open-shadow media discovery, deterministic active-player keyboard control, and exact modifier chords;
+- speed reassertion after a simulated site reset;
+- hostile page CSS isolation and one portal across a 42-media stress page;
+- tiny-frame deferral/growth and popup routing to one playing iframe;
+- custom presets, legacy-shaped import, Sync collection chunking, and round-trip reads;
+- 30-second time-saved batching with immediate partial flush on pause; and
+- controller cleanup after all media and iframe owners are removed.
 
-## Shadow DOM
+The live-site check is deliberately opt-in so normal development does not depend on a third party:
 
-Selectors never cross a shadow boundary, so these cases are invisible to the document
-observer and need their own pass. Use the shadow buttons on the test page.
+```bash
+VSC_REAL_SITE_SMOKE=1 npm run test:e2e
+```
 
-15. **Add shadow host with video** — a host that enters the DOM with a video already inside
-    its shadow root gets a controller.
-16. **Add video into existing shadow** — a shadow root that was attached at load and was empty
-    gets a controller when a video is added to it later. This is the lazy-loading player case.
-17. **Add nested shadow video** — a video two shadow roots deep gets a controller.
-18. **Add closed shadow video** — expected to get **no** controller. Closed roots are
-    unreachable from an extension; this is a limitation, not a regression.
-19. For each controlled shadow video, confirm the overlay is styled and that speed changes and
-    keyboard shortcuts affect playback.
-20. **Remove shadow videos** and confirm the controllers and tracked media state disappear.
-21. Click **Check controllers** and confirm the count reports `pass`. The counter walks open
-    shadow roots and excludes closed-root videos.
+It opens the YouTube HTML5 test player, waits for the extension portal, and verifies keyboard
+speed control. A failure can also mean YouTube changed or blocked automated playback, so confirm
+it manually before treating it as an extension regression.
 
-## Style isolation
+## Manual Chrome smoke test
 
-Overlays render into closed shadow roots, so page CSS cannot reach them and their styles
-cannot leak into the page.
+1. Open `chrome://extensions`, enable **Developer mode**, and load the repository root unpacked.
+2. Run `npm run test:manual`, open `http://127.0.0.1:4173/media.html`, and reload once.
+3. Confirm exactly one shared controller appears for the initial video.
+4. Add the dynamic video and the 40-video feed. The controller count must remain one; starting or
+   interacting with another player must retarget that controller.
+5. Remove the active video and confirm another eligible player takes over. Remove all media and
+   confirm the controller host disappears.
+6. Verify compact-popup play/pause, remaining time, custom presets, plus/minus step, current speed,
+   enabled state, and the **Advanced settings** link.
+7. In the options page, verify shortcut recording/conflict feedback, appearance, rules,
+   silence-skip settings, and settings import/export.
+8. Use the full overlay's seek, frame, screenshot, filters, volume, intro/outro, and A–B loop tools.
+9. Open the service-worker and page consoles and confirm there are no unexpected errors.
 
-22. Click **Toggle hostile page CSS** on the test page. Every overlay must stay visible,
-    correctly positioned, and normally sized. The injected rules use `!important`, which
-    outranks a plain inline style — the regression this guards against is a host that collapses
-    to `position: static` or `z-index: 0`.
-23. With hostile CSS on, confirm the controller, the right-click speed menu, and the
-    picture-in-picture indicator all still work.
-24. Confirm the page's own layout is unchanged when the extension is enabled — no font, colour,
-    or spacing shifts from overlay styles leaking outward.
-25. On a site with a strict Content-Security-Policy, confirm overlays are still styled. The
-    stylesheet is fetched from `web_accessible_resources`; if the fetch is blocked the code
-    falls back to a `<link>` inside each root, and an unstyled overlay means both paths failed.
+## Shadow roots and style isolation
 
-## Frame skipping
+1. Exercise **Add shadow host**, **Fill existing shadow**, and **Add nested shadow**. Each reachable
+   video must be controllable through the same top-frame portal.
+2. **Add closed shadow video** is expected to remain unreachable; this is a browser boundary.
+3. Click **Toggle hostile page CSS**. The controller, right-click menu, feedback, and PiP indicator
+   must stay normally sized and positioned.
+4. Click **Check controllers**. It should report one shared controller for any number of reachable
+   videos in the frame.
 
-The content script skips subframes it measures as smaller than 150px in either direction. A
-frame reporting 0x0 is not laid out yet rather than small, so it is never skipped on that basis.
+## Frames and real sites
 
-26. Click **Add iframes (tiny + real)**. The 640x360 frame gets a controller; the 120x120 frame
-    does not.
-27. Click **Grow the tiny frame** and confirm it picks up a controller without a page reload.
-28. Note the threshold catches tracking pixels, 320x50 banners, and 728x90 leaderboards, but not
-    300x250 or 160x600 ad units. That is deliberate: frame election already stops those from
-    taking commands, so the size test only has to be cheap and safe, not exhaustive.
-
-## Frame routing
-
-29. Open a page with an embedded player in an iframe plus a second video. Confirm a keyboard
-    shortcut changes the speed of the intended video only, not both.
-30. Confirm the popup's speed presets and current-speed readout act on the same video the
-    keyboard shortcuts do.
-
-## Speed enforcement
-
-31. On YouTube, set a speed and let the video advance to the next one. With **Force Saved
-    Speed** on, the speed must be reapplied rather than reverting to 1.00x.
-32. With **Force Saved Speed** off, the site's own speed menu must still work: changing speed
-    through the player's native control must stick and not be overridden.
+1. Click **Add iframes (tiny + real)**. The 640×360 frame initializes; the 120×120 frame does not.
+2. Click **Grow the tiny frame** and confirm it initializes without a page reload.
+3. Play only the real iframe and use the compact popup. Only that frame's media should change.
+4. On YouTube, enable **Force Saved Speed**, advance to another video, and confirm the saved speed
+   is restored. With force mode disabled, YouTube's native speed menu must still be respected once
+   the extension's short correction window expires.
+5. Netflix and other authenticated/DRM sites require a signed-in manual pass. Confirm speed changes,
+   next-episode behavior, and that unsupported silence analysis fails closed without muting audio.
 
 ## Release artifact
 
 ```bash
 npm run package
-unzip -t dist/video-speed-controller-v1.4.0.zip
+unzip -t dist/video-speed-controller-v1.6.0.zip
 ```
 
-Load the unpacked repository for development, but upload only the versioned ZIP from `dist/` to the Chrome Web Store.
+Load the repository root unpacked for development. Upload only the versioned ZIP from `dist/`.
