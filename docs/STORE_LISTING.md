@@ -43,5 +43,6 @@ Sync; the time-saved counter stays in local extension storage.
 5. **Tools for serious viewing** — full controller showing A–B loop, frame step, filters,
    screenshot, intro/outro, and volume boost.
 
-Use 1280×800 or 640×400 images, keep the real UI readable, and avoid claims about unsupported
-closed-shadow, canvas/WebGL-only, or DRM-restricted players.
+Use the five upload-ready 1280×800 JPEGs in `store-assets/`, keep the real UI readable, and avoid
+claims about unsupported closed-shadow, canvas/WebGL-only, or DRM-restricted players. The
+reproducible HTML/CSS capture surface is retained in `store-assets/source/`.
