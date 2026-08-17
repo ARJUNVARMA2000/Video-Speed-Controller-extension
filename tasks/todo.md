@@ -548,3 +548,118 @@ consecutive runs, including explicit-speed recovery from silence mode and thumbn
 growth. The 40-video next-frame measurements were 6.8ms, 7.6ms, 7.1ms, and 6.6ms (7.0ms median),
 down from the pre-audit 12.9ms run. `npm run package` now runs that full gate automatically; the
 resulting 124KB `dist/video-speed-controller-v1.6.0.zip` passes `unzip -t`.
+
+---
+
+# v1.7 lazy runtime, hot-path cleanup, and test architecture
+
+## Audit baseline
+
+- `npm run check`: 23/23 tests pass in 0.35s.
+- `npm run test:e2e`: passes in 8.17s; the 40-video next-frame delay is 6.2ms.
+- The statically injected content script is 116KB / 3,144 lines. Every eligible top frame and
+  iframe parses it and requests the complete Sync snapshot even when the document has no media.
+- Seven-run local Chromium medians on an empty document show 6.49ms renderer task time and 862KB
+  heap with the extension versus 3.83ms and 434KB without it: about 2.7ms and 428KB of no-op cost.
+- A no-media page with 20 non-negligible iframes shows 47.28ms renderer task time and 14.0MB heap
+  with the extension versus 36.88ms and 8.3MB without it: about 10.4ms and 5.7MB of no-op cost.
+- Dynamically adding the first media element produces a controller in 19.1ms median on the current
+  eager runtime; the lazy split must keep that activation cost bounded and report the tradeoff.
+- The service worker rereads and decodes the entire chunked Sync payload for every settings read,
+  including requests that only need one scalar value.
+- Nearly all content behavior is covered only by one monolithic browser scenario; active-media
+  arbitration, speed enforcement, silence transitions, and time-saved accounting have no direct
+  unit tests.
+
+## Plan
+
+### Phase 1 — measurements and regression budgets
+
+- [x] Add a repeatable Playwright benchmark for an empty page, an empty iframe farm, first-media
+      activation, and bulk media churn. Record median task time, runtime-load state, message/storage
+      reads, and first-controller latency without using timing thresholds that are flaky in CI.
+- [x] Add deterministic performance gates: a strict byte budget for the always-injected bootstrap,
+      proof that the full runtime is not requested on no-media pages, and bounded first-media and
+      40-video behavior in the existing unpacked-extension E2E gate.
+
+### Phase 2 — lazy content architecture
+
+- [x] Replace the 116KB statically injected runtime with a small bootstrap that detects candidate
+      video/audio elements (including dynamically added and open-shadow media), handles tiny-frame
+      growth, and dynamically imports the packaged runtime only when media exists.
+- [x] Keep popup/command behavior correct before runtime activation, bridge mutations that happen
+      while the module is loading, and use Manifest V3 dynamic web-accessible URLs so code splitting
+      does not create a stable extension-fingerprinting URL.
+- [x] Extract the DOM-independent content decisions into a small module used by the real runtime:
+      visible-area calculation, active-media/frame ranking, speed-enforcement decisions, silence
+      state transitions, and time-saved accrual.
+
+### Phase 3 — runtime and worker hot paths
+
+- [x] Coalesce play, pause, interaction, attach, and detach arbitration through one scheduled media
+      snapshot; reuse its geometry for frame reporting and avoid rebuilding controller HTML when
+      the selected media and controller mode have not changed.
+- [x] Replace one-second O(media-count) time-saved polling with event/lifecycle-based accrual plus
+      the existing 30-second flush boundary, preserving partial batches across failed messages and
+      page lifecycle transitions.
+- [x] Add a coherent in-memory normalized settings cache to the service worker, invalidate it on
+      external `storage.onChanged` events, and separate content settings reads from popup-only local
+      statistics so repeated frame and UI requests do not decode the full Sync store unnecessarily.
+- [x] Measure session-state writes during scrolling and playback; debounce or deduplicate identical
+      frame reports if the benchmark shows meaningful write pressure, without weakening restart-safe
+      frame routing.
+
+### Phase 4 — layered tests and release verification
+
+- [x] Add fast unit tests for the extracted content decisions and worker cache invalidation, focused
+      browser tests for bootstrap/runtime activation and lifecycle cleanup, and split the monolithic
+      E2E flow into named phases with failure-specific diagnostics while reusing one browser launch.
+- [x] Add adversarial regressions for simultaneous play/pause bursts, media appearing during lazy
+      import, settings changed before activation, worker restart after cached updates, blocked sites,
+      audio-only pages, shadow-root media, and extension-context invalidation.
+- [x] Run repeated before/after benchmarks and the full syntax/unit/integration/E2E/package gate;
+      document measured deltas and known tradeoffs, update architecture/testing docs, and prepare an
+      intentional v1.7 release commit without publishing it automatically.
+
+## Review
+
+Implemented on `agent/performance-and-test-hardening` after plan approval. The only statically
+injected code is now a 7,576-byte bootstrap under an enforced 8KB budget. It observes light and
+open-shadow DOM, handles growing frames, and loads the tested logic plus 116KB feature runtime in
+parallel only after media exists. Chromium's parsed-script stream proves neither lazy module loads
+on an empty page. Settings changed before activation, media inserted during the import window,
+disabled/blocked sites, and audio-only pages are covered in the unpacked-extension test.
+
+The content runtime coalesces attach, detach, play, pause, interaction, and resize arbitration;
+reuses a short-lived geometry snapshot; shares one resize observer; and does not rebuild controller
+HTML for an unchanged media/mode target. Time-saved accounting accrues on media and lifecycle events
+instead of scanning all media every second, while retaining the 30-second write boundary, pause
+flush, and failed-write retry. Exact duplicate frame reports are dropped before messaging and again
+in the worker; an instrumented 50-scroll burst produces zero session writes when geometry is stable.
+
+The service worker caches one decoded Sync snapshot, applies external scalar changes in place,
+invalidates on chunk/index changes, and excludes local statistics from content startup. A saved site
+speed writes only its own collection chunks plus the index, with quota validation and rollback;
+unrelated settings and collections are not resubmitted.
+
+**Measured result (repeated seven-run local Chromium medians):** empty-page extension overhead fell
+from 2.66ms task / 428KB heap to 1.47–1.58ms / 365KB (about 41–45% / 15% lower). Twenty empty frames
+remain dominated by Chrome's per-frame isolated-world cost: task overhead was 11.40–12.73ms versus
+the 10.40ms baseline (no supported speedup claim), while heap overhead fell from about 5.7MB to
+5.3MB. First controller activation is 19.9–20.4ms versus 19.1ms eager (+0.8–1.3ms); loading the lazy
+modules in parallel keeps that tradeoff bounded. A 40-media insertion reaches the next frame with
+1.3–1.4ms extension overhead. The fixture E2E run records 7.0ms for its richer 40-media case, well
+inside the 100ms release gate.
+
+**Verification:** 34/34 unit/integration tests pass. The final Node coverage report is
+85.69% lines overall (98.36% content logic, 96.67% settings, 78.79% worker). The named-phase E2E
+suite passes lazy loading, settings races, active arbitration, shortcut/popup routing, silence
+override, thumbnail growth, open shadow roots, hostile CSS, simultaneous play/pause, duplicate
+scroll reports, frames, chunk migration, event-based accounting, audio-only pages, blocked sites,
+cleanup, and extension-context invalidation. `npm run package` runs the full gate; the resulting
+130KB `dist/video-speed-controller-v1.7.0.zip` passes `unzip -t`.
+
+**Known tradeoffs/limits:** every eligible iframe still needs the tiny bootstrap so media added
+later or in a cross-origin player can be detected; Chrome's isolated-world cost cannot be removed
+without losing that feature. Closed shadow roots, canvas players, and protected media remain the
+same browser/platform limits documented for v1.6. Firefox remains out of scope.

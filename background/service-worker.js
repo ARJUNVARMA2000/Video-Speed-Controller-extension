@@ -20,6 +20,11 @@ let timeSavedWriteQueue = Promise.resolve();
 let timeSavedCache = null;
 let frameStateHydration = null;
 let frameStateMutationQueue = Promise.resolve();
+let syncSettingsCache = null;
+let syncSettingsReadPromise = null;
+let syncSettingsCacheGeneration = 0;
+let syncCollectionIndexCache = null;
+let syncLegacyCollectionKeysCache = null;
 
 const SYNC_COLLECTIONS = new Set([
   'blacklist',
@@ -105,8 +110,51 @@ function decodeSyncSnapshot(raw) {
   return result;
 }
 
+async function getCachedSyncSettings() {
+  while (!syncSettingsCache) {
+    if (!syncSettingsReadPromise) {
+      const generation = syncSettingsCacheGeneration;
+      syncSettingsReadPromise = chrome.storage.sync.get(null)
+        .then(raw => ({
+          generation,
+          decoded: decodeSyncSnapshot(raw),
+          collectionIndex: raw?.[COLLECTION_INDEX_KEY] || {},
+          legacyCollectionKeys: new Set([...SYNC_COLLECTIONS]
+            .filter(key => Object.prototype.hasOwnProperty.call(raw || {}, key)))
+        }))
+        .finally(() => { syncSettingsReadPromise = null; });
+    }
+    const { generation, decoded, collectionIndex, legacyCollectionKeys } = await syncSettingsReadPromise;
+    // A storage change that landed during get(null) invalidated this snapshot.
+    // Loop and fetch again instead of installing stale settings.
+    if (generation === syncSettingsCacheGeneration) {
+      syncSettingsCache = decoded;
+      syncCollectionIndexCache = collectionIndex;
+      syncLegacyCollectionKeysCache = legacyCollectionKeys;
+    }
+  }
+  return syncSettingsCache;
+}
+
+function replaceSyncSettingsCache(snapshot, {
+  collectionIndex = syncCollectionIndexCache,
+  legacyCollectionKeys = syncLegacyCollectionKeysCache
+} = {}) {
+  syncSettingsCacheGeneration += 1;
+  syncSettingsCache = snapshot;
+  syncCollectionIndexCache = collectionIndex;
+  syncLegacyCollectionKeysCache = legacyCollectionKeys;
+}
+
+function invalidateSyncSettingsCache() {
+  syncSettingsCacheGeneration += 1;
+  syncSettingsCache = null;
+  syncCollectionIndexCache = null;
+  syncLegacyCollectionKeysCache = null;
+}
+
 async function readSyncSettings(keys = null) {
-  const decoded = decodeSyncSnapshot(await chrome.storage.sync.get(null));
+  const decoded = await getCachedSyncSettings();
   if (keys == null) return decoded;
   const requested = typeof keys === 'string' ? [keys] : keys;
   return Object.fromEntries(requested
@@ -163,11 +211,74 @@ async function commitSyncSnapshot(snapshot) {
   return snapshot;
 }
 
-function mutateSyncSettings(mutator) {
+async function commitSyncPatch(current, next, changedKeys) {
+  const nextPayload = buildSyncPayload(next);
+  const nextFullIndex = nextPayload[COLLECTION_INDEX_KEY];
+  const nextIndex = { ...(syncCollectionIndexCache || {}) };
+  const legacyKeys = new Set(syncLegacyCollectionKeysCache || []);
+  const updates = {};
+  const staleKeys = new Set();
+  const staleEntries = {};
+  let touchesCollection = false;
+  let currentPayload = null;
+
+  for (const key of changedKeys) {
+    if (!SYNC_COLLECTIONS.has(key)) {
+      if (Object.prototype.hasOwnProperty.call(next, key)) updates[key] = next[key];
+      else {
+        staleKeys.add(key);
+        if (Object.prototype.hasOwnProperty.call(current, key)) staleEntries[key] = current[key];
+      }
+      continue;
+    }
+
+    touchesCollection = true;
+    const nextMetadata = nextFullIndex[key];
+    const previousMetadata = syncCollectionIndexCache?.[key];
+    nextIndex[key] = nextMetadata;
+    for (let index = 0; index < nextMetadata.count; index += 1) {
+      const chunkKey = collectionChunkKey(key, index);
+      updates[chunkKey] = nextPayload[chunkKey];
+    }
+    for (let index = nextMetadata.count; index < (previousMetadata?.count || 0); index += 1) {
+      const chunkKey = collectionChunkKey(key, index);
+      staleKeys.add(chunkKey);
+      currentPayload ||= buildSyncPayload(current);
+      if (Object.prototype.hasOwnProperty.call(currentPayload, chunkKey)) staleEntries[chunkKey] = currentPayload[chunkKey];
+    }
+    if (legacyKeys.has(key)) {
+      staleKeys.add(key);
+      staleEntries[key] = current[key];
+      legacyKeys.delete(key);
+    }
+  }
+
+  if (touchesCollection) updates[COLLECTION_INDEX_KEY] = nextIndex;
+  if (staleKeys.size > 0) await chrome.storage.sync.remove([...staleKeys]);
+  try {
+    if (Object.keys(updates).length > 0) await chrome.storage.sync.set(updates);
+  } catch (error) {
+    if (Object.keys(staleEntries).length > 0) await chrome.storage.sync.set(staleEntries).catch(() => {});
+    throw error;
+  }
+  return { snapshot: next, collectionIndex: nextIndex, legacyCollectionKeys: legacyKeys };
+}
+
+function mutateSyncSettings(mutator, { changedKeys = null } = {}) {
   const operation = syncWriteQueue.then(async () => {
     const current = await readSyncSettings();
     const next = await mutator(current);
-    return await commitSyncSnapshot(next);
+    if (changedKeys) {
+      const patched = await commitSyncPatch(current, next, changedKeys);
+      replaceSyncSettingsCache(patched.snapshot, patched);
+      return next;
+    }
+    const committed = await commitSyncSnapshot(next);
+    replaceSyncSettingsCache(committed, {
+      collectionIndex: buildSyncPayload(committed)[COLLECTION_INDEX_KEY],
+      legacyCollectionKeys: new Set()
+    });
+    return committed;
   });
   syncWriteQueue = operation.catch(() => {});
   return operation;
@@ -178,12 +289,10 @@ function writeSyncSettings(updates) {
     const current = await readSyncSettings();
     const next = { ...current, ...updates };
 
-    // Validate against the same per-item and total quotas as a full commit,
-    // but do not rewrite every collection chunk for a scalar-only change.
-    buildSyncPayload(next);
-    const touchesCollection = Object.keys(updates).some(key => SYNC_COLLECTIONS.has(key));
-    if (touchesCollection) await commitSyncSnapshot(next);
-    else await chrome.storage.sync.set(updates);
+    // Validate against the full quota while committing only changed scalars or
+    // collection chunks.
+    const committed = await commitSyncPatch(current, next, Object.keys(updates));
+    replaceSyncSettingsCache(committed.snapshot, committed);
     return next;
   });
   syncWriteQueue = operation.catch(() => {});
@@ -193,6 +302,27 @@ function writeSyncSettings(updates) {
 function replaceSyncSettings(settings) {
   return mutateSyncSettings(() => settings);
 }
+
+// Keep the worker cache coherent with settings changed by Sync, another
+// extension context, or this worker's own writes. Scalar changes can be patched
+// in place; chunk/index changes require a fresh decode of the complete payload.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return;
+  const keys = Object.keys(changes);
+  const touchesEncodedCollection = keys.some(key =>
+    key === COLLECTION_INDEX_KEY || key.startsWith(COLLECTION_CHUNK_PREFIX) || SYNC_COLLECTIONS.has(key));
+  if (touchesEncodedCollection || !syncSettingsCache) {
+    invalidateSyncSettingsCache();
+    return;
+  }
+
+  const next = { ...syncSettingsCache };
+  for (const [key, change] of Object.entries(changes)) {
+    if (change.newValue === undefined) delete next[key];
+    else next[key] = change.newValue;
+  }
+  replaceSyncSettingsCache(next);
+});
 
 // Per-tab media frame registry. Content scripts run in every frame, so commands
 // have to be routed to one elected frame instead of broadcast to all of them.
@@ -241,8 +371,10 @@ async function persistTabFrameStates(tabId) {
 function mutateTabFrameStates(tabId, mutator) {
   const operation = frameStateMutationQueue.then(async () => {
     await hydrateFrameMediaStates();
-    mutator();
+    const changed = mutator();
+    if (changed === false) return false;
     await persistTabFrameStates(tabId);
+    return true;
   });
   frameStateMutationQueue = operation.catch(() => {});
   return operation;
@@ -255,15 +387,26 @@ function recordFrameMediaState(sender, state) {
 
   return mutateTabFrameStates(tabId, () => {
     let frames = frameMediaStates.get(tabId);
+    if (!frames && !state?.hasMedia) return false;
     if (!frames) {
       frames = new Map();
       frameMediaStates.set(tabId, frames);
     }
 
-    if (state?.hasMedia) frames.set(frameId, { state });
-    else frames.delete(frameId);
+    const previous = frames.get(frameId)?.state;
+    if (state?.hasMedia) {
+      if (previous && previous.hasMedia === true &&
+          previous.playing === state.playing &&
+          previous.area === state.area &&
+          previous.isTop === state.isTop) return false;
+      frames.set(frameId, { state });
+    } else {
+      if (!frames.has(frameId)) return false;
+      frames.delete(frameId);
+    }
 
     if (frames.size === 0) frameMediaStates.delete(tabId);
+    return true;
   });
 }
 
@@ -274,8 +417,10 @@ function clearTabFrameMediaStates(tabId) {
 function forgetFrameMediaState(tabId, frameId) {
   return mutateTabFrameStates(tabId, () => {
     const frames = frameMediaStates.get(tabId);
+    if (!frames?.has(frameId)) return false;
     frames?.delete(frameId);
     if (frames?.size === 0) frameMediaStates.delete(tabId);
+    return true;
   });
 }
 
@@ -375,7 +520,7 @@ function flushCollectionWrites() {
         updates[collection] = sanitizeSettingsPatch({ [collection]: next })[collection] || {};
       }
       return { ...current, ...updates };
-    });
+    }, { changedKeys: [...batch.keys()] });
     // Every live frame owns one normalized snapshot. Keep collection changes
     // coherent without resending unrelated settings or asking each frame to
     // reread storage.
@@ -482,14 +627,17 @@ async function handleMessage(message, sender) {
     }
 
     case 'getSettings': {
-      const [syncSettings, localSettings] = await Promise.all([
+      const [syncSettings, timeSaved] = await Promise.all([
         readSyncSettings(),
-        chrome.storage.local.get(['timeSaved'])
+        getTimeSavedValue()
       ]);
-      const timeSaved = typeof localSettings.timeSaved === 'number' ? localSettings.timeSaved : 0;
-      timeSavedCache = timeSaved;
       return { ...normalizeSettings(syncSettings), timeSaved };
     }
+
+    case 'getContentSettings':
+      // Content frames do not display the local aggregate statistic. Keeping it
+      // out of their startup path avoids a second storage-area read per frame.
+      return normalizeSettings(await readSyncSettings());
 
     case 'saveSettings':
     case 'updateSettings': {
@@ -545,13 +693,13 @@ async function handleMessage(message, sender) {
       return await checkSiteAccess(message.url);
 
     case 'exportSettings': {
-      const [exportSync, exportLocal] = await Promise.all([
+      const [exportSync, exportTimeSaved] = await Promise.all([
         readSyncSettings(),
-        chrome.storage.local.get(['timeSaved'])
+        getTimeSavedValue()
       ]);
       return {
         ...normalizeSettings(exportSync),
-        timeSaved: typeof exportLocal.timeSaved === 'number' ? exportLocal.timeSaved : 0
+        timeSaved: exportTimeSaved
       };
     }
 

@@ -10,6 +10,11 @@ const { chromium } = require('playwright');
 const extensionPath = path.resolve(__dirname, '..');
 const fixtureRoot = path.resolve(__dirname, '../test/manual');
 const host = '127.0.0.1';
+let activePhase = 'startup';
+
+function phase(name) {
+  activePhase = name;
+}
 
 function startServer() {
   const server = http.createServer((request, response) => {
@@ -94,16 +99,93 @@ async function run() {
     assert.match(extensionId, /^[a-p]{32}$/);
 
     const page = context.pages()[0] || await context.newPage();
+    const debugSession = await context.newCDPSession(page);
+    const parsedExtensionScripts = [];
+    debugSession.on('Debugger.scriptParsed', event => {
+      if (event.url.startsWith('chrome-extension://')) parsedExtensionScripts.push(event.url);
+    });
+    await debugSession.send('Debugger.enable');
 
-    // A page without media should pay no controller-DOM cost.
+    phase('lazy bootstrap and pre-activation settings');
+    // A page without media should pay only for the byte-budgeted bootstrap: the
+    // 100+ KB feature runtime must remain unparsed until media actually exists.
     await page.goto(`http://${host}:${port}/empty.html`);
     await page.waitForTimeout(400);
     assert.equal(await page.locator('.vsc-shadow-host').count(), 0);
+    assert.ok(parsedExtensionScripts.some(url => url.endsWith('/content/bootstrap.js')),
+      `bootstrap was not observed in parsed scripts: ${parsedExtensionScripts.join(', ')}`);
+    assert.equal(parsedExtensionScripts.some(url => url.endsWith('/content/logic.js')), false,
+      'content logic loaded on a no-media page');
+    assert.equal(parsedExtensionScripts.some(url => url.endsWith('/content/content.js')), false,
+      'full content runtime loaded on a no-media page');
 
+    // A settings broadcast before activation is intentionally ignored by the
+    // bootstrap; once media arrives the runtime must read the newest snapshot.
+    // Insert two players in the import window to prove its final scan loses none.
+    const setupPage = await context.newPage();
+    await setupPage.goto(`chrome-extension://${extensionId}/popup/compact.html`);
+    const disabled = await setupPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { enabled: false }
+    }));
+    assert.equal(disabled.success, true);
+    await page.bringToFront();
+    await page.evaluate(() => {
+      for (const id of ['lazy-first', 'lazy-second']) {
+        const video = document.createElement('video');
+        video.id = id;
+        video.style.cssText = 'width:640px;height:360px';
+        document.body.append(video);
+      }
+    });
+    await page.waitForTimeout(400);
+    assert.ok(parsedExtensionScripts.some(url => url.endsWith('/content/content.js')),
+      'media did not trigger the lazy runtime');
+    assert.ok(parsedExtensionScripts.some(url => url.endsWith('/content/logic.js')),
+      'media did not trigger the testable content logic module');
+    assert.equal(await page.locator('.vsc-host-controller').count(), 0,
+      'runtime ignored the disabled setting read during activation');
+
+    const enabled = await setupPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { enabled: true }
+    }));
+    assert.equal(enabled.success, true);
+    await waitForController(page);
+    await page.locator('#lazy-second').evaluate(video =>
+      video.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    await page.keyboard.press('d');
+    await page.waitForFunction(() => document.querySelector('#lazy-second').playbackRate === 1.1);
+    assert.equal(await page.locator('#lazy-first').evaluate(video => video.playbackRate), 1);
+    await page.locator('#lazy-first, #lazy-second').evaluateAll(videos => videos.forEach(video => video.remove()));
+    await waitForController(page, 0);
+    await setupPage.close();
+
+    phase('core media controls');
     await page.goto(`http://${host}:${port}/media.html`);
     await waitForController(page);
+    assert.ok(parsedExtensionScripts.some(url => url.endsWith('/content/content.js')),
+      `content runtime did not load after media appeared: ${parsedExtensionScripts.join(', ')}`);
     assert.equal(await page.locator('.vsc-wrapper').count(), 0, 'media must never be reparented into wrappers');
     assert.equal(await page.locator('#primary-video').evaluate(video => video.parentElement.className), 'media-card');
+
+    // Duplicate scroll events with unchanged geometry must be absorbed in the
+    // content frame instead of rewriting restart-safe session routing state.
+    await page.waitForTimeout(350);
+    const sessionWriteProbe = await worker.evaluate(() => {
+      const originalSet = chrome.storage.session.set.bind(chrome.storage.session);
+      globalThis.__vscSessionSetCalls = 0;
+      const wrappedSet = (...args) => {
+        globalThis.__vscSessionSetCalls += 1;
+        return originalSet(...args);
+      };
+      chrome.storage.session.set = wrappedSet;
+      return chrome.storage.session.set === wrappedSet;
+    });
+    assert.equal(sessionWriteProbe, true);
+    await page.evaluate(() => {
+      for (let index = 0; index < 50; index += 1) window.dispatchEvent(new Event('scroll'));
+    });
+    await page.waitForTimeout(350);
+    assert.equal(await worker.evaluate(() => globalThis.__vscSessionSetCalls), 0);
 
     // A dynamically played video becomes active; the configured keyboard step
     // must affect it and not the older playing video.
@@ -121,6 +203,7 @@ async function run() {
     await page.locator('#dynamic-video').evaluate(video => { video.playbackRate = 1; });
     await page.waitForFunction(() => Math.abs(document.querySelector('#dynamic-video').playbackRate - 1.1) < 0.001);
 
+    phase('shortcut routing and popup relay');
     // Full modifier chords survive settings normalization and execute only on
     // the elected media. Capture the media tab before opening an extension tab.
     await page.bringToFront();
@@ -149,6 +232,7 @@ async function run() {
     await page.keyboard.press('Control+Shift+K');
     await page.waitForFunction(() => Math.abs(document.querySelector('#dynamic-video').playbackRate - 1.25) < 0.001);
 
+    phase('silence acceleration override');
     // Silence acceleration must yield cleanly to an explicit user speed. The
     // fixture intentionally has no audio track, so it is deterministic silence
     // without microphone, network, or codec timing dependencies.
@@ -180,6 +264,7 @@ async function run() {
       type: 'updateSettings', updates: { silenceSkipEnabled: false }
     }));
 
+    phase('deferred thumbnail growth');
     // Thumbnail-sized media is deferred without polling, then becomes
     // controllable as soon as the same element expands into a real player.
     await page.locator('video').evaluateAll(videos => videos.forEach(video => video.pause()));
@@ -216,6 +301,7 @@ async function run() {
     });
     await page.locator('#deferred-video').evaluate(video => video.remove());
 
+    phase('open shadow media');
     // Media in an open shadow root is discovered and controls the same portal.
     await page.locator('video').evaluateAll(videos => videos.forEach(video => video.pause()));
     await page.locator('#add-shadow-host').click();
@@ -230,6 +316,7 @@ async function run() {
     assert.equal(await page.locator('.vsc-host-controller').count(), 1);
     await page.locator('#remove-shadow').click();
 
+    phase('hostile CSS and bulk media');
     // Hostile author CSS must not move or suppress the fixed shadow portal.
     await page.locator('#hostile-css').click();
     const hostStyle = await page.locator('.vsc-host-controller').evaluate(hostElement => {
@@ -253,6 +340,32 @@ async function run() {
     assert.equal(await page.locator('.vsc-wrapper').count(), 0);
     assert.ok(frameDelayMs < 100, `40-video insertion blocked a frame for ${frameDelayMs.toFixed(1)}ms`);
 
+    // A burst of real play/pause events must still settle on one arbitration
+    // winner and one controller rather than rebuilding once per event.
+    const burstVideos = page.locator('.stress-video');
+    const burstRatesBefore = await burstVideos.evaluateAll(videos =>
+      videos.slice(0, 8).map(video => video.playbackRate));
+    await burstVideos.evaluateAll(async videos => {
+      const active = videos.slice(0, 8);
+      for (const video of active) {
+        video.src = 'sample.webm';
+        video.muted = true;
+      }
+      await Promise.all(active.map(video => video.play()));
+      active.slice(0, -1).forEach(video => video.pause());
+      active.at(-1).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    await page.keyboard.press('Control+Shift+K');
+    await page.waitForFunction(expected =>
+      Math.abs(document.querySelectorAll('.stress-video')[7].playbackRate - expected) < 0.001,
+    burstRatesBefore[7] + 0.25);
+    const burstRates = await page.locator('.stress-video').evaluateAll(videos =>
+      videos.slice(0, 8).map(video => video.playbackRate));
+    assert.deepEqual(burstRates, burstRatesBefore.map((rate, index) => index === 7 ? rate + 0.25 : rate));
+    assert.equal(await page.locator('.vsc-host-controller').count(), 1);
+    await page.locator('.stress-video').evaluateAll(videos => videos.forEach(video => video.pause()));
+
+    phase('frame lifecycle and routing');
     // Frame lifecycle: tiny players defer initialization until they become
     // large enough; a real playing iframe wins background relay arbitration.
     await page.locator('video').evaluateAll(videos => videos.forEach(video => video.pause()));
@@ -272,6 +385,7 @@ async function run() {
     await page.locator('#grow-frame').click();
     await waitForController(tinyFrame);
 
+    phase('storage migration and popup presets');
     // Import through the real worker, verify collection chunking, and verify
     // custom presets in the compact UI after a reload.
     const savedSpeeds = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [`site-${index}.example`, 1.5]));
@@ -296,6 +410,7 @@ async function run() {
     assert.equal(relay.success, true, relay.error);
     await realFrame.waitForFunction(() => document.querySelector('#frame-video').playbackRate === 2);
 
+    phase('event-based time-saved accounting');
     // Time-saved accounting remains local during playback and flushes its
     // partial 30-second batch as soon as playback pauses.
     await realFrame.waitForTimeout(1300);
@@ -306,6 +421,7 @@ async function run() {
     assert.ok(flushedTimeSaved > 0, `expected a flushed time-saved batch, got ${flushedTimeSaved}`);
     await extensionPage.close();
 
+    phase('media cleanup');
     // Removing every media owner cleans up the top-frame portal. Child portals
     // disappear with their iframe documents.
     await page.bringToFront();
@@ -315,7 +431,57 @@ async function run() {
     await page.locator('#frame-slot').evaluate(frameSlot => frameSlot.remove());
     await waitForController(page, 0);
 
+    phase('audio-only activation and blocked sites');
+    const diagnosticsPage = await context.newPage();
+    await diagnosticsPage.goto(`chrome-extension://${extensionId}/popup/compact.html`);
+    const audioEnabled = await diagnosticsPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { workOnAudio: true }
+    }));
+    assert.equal(audioEnabled.success, true);
+    await page.bringToFront();
+    await page.goto(`http://${host}:${port}/empty.html?audio=1`);
+    await page.evaluate(() => {
+      const audio = document.createElement('audio');
+      audio.id = 'audio-only';
+      audio.controls = true;
+      document.body.append(audio);
+    });
+    await waitForController(page);
+    await page.locator('#audio-only').evaluate(audio =>
+      audio.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    await page.keyboard.press('d');
+    await page.waitForFunction(() => document.querySelector('#audio-only').playbackRate === 1.1);
+
+    const audioDisabled = await diagnosticsPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { workOnAudio: false }
+    }));
+    assert.equal(audioDisabled.success, true);
+    await waitForController(page, 0);
+
+    const blocked = await diagnosticsPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { blacklist: ['127.0.0.1'], siteAccessMode: 'blacklist' }
+    }));
+    assert.equal(blocked.success, true);
+    await page.goto(`http://${host}:${port}/media.html?blocked=1`);
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('.vsc-host-controller').count(), 0);
+    const unblocked = await diagnosticsPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { blacklist: [] }
+    }));
+    assert.equal(unblocked.success, true);
+    await waitForController(page);
+    await diagnosticsPage.close();
+
     if (process.env.VSC_REAL_SITE_SMOKE === '1') await runYouTubeSmoke(context);
+
+    // Reloading an unpacked extension invalidates its old content context. A
+    // later interaction must remove extension-owned DOM instead of throwing or
+    // leaving a dead controller over the page.
+    phase('extension-context invalidation cleanup');
+    await worker.evaluate(() => chrome.runtime.reload()).catch(() => {});
+    await page.waitForTimeout(500);
+    await page.keyboard.press('d');
+    await waitForController(page, 0);
 
     console.log(`E2E passed: extension ${extensionId}, one portal for 42 media, ` +
       `40-video frame delay ${frameDelayMs.toFixed(1)}ms, batched ${flushedTimeSaved.toFixed(2)}s saved, ` +
@@ -328,6 +494,7 @@ async function run() {
 }
 
 run().catch(error => {
+  console.error(`E2E failed during phase: ${activePhase}`);
   console.error(error);
   process.exitCode = 1;
 });

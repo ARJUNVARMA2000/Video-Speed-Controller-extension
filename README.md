@@ -19,7 +19,7 @@ Online learning has exploded, but video platforms cap speed options at 0.5×–2
 
 ## Approach
 
-1. **Content script injection** — scripts locate all video elements on the page, including dynamically loaded ones
+1. **Lazy content activation** — a byte-budgeted detector watches for media; the full runtime is parsed only after media exists
 2. **MutationObserver pattern** — watch for new `<video>` elements entering the DOM and auto-apply speed settings
 3. **Persistent storage** — Chrome's storage API remembers speed preferences per-site and globally
 4. **One non-intrusive portal** — a fixed, closed-shadow controller follows the active player without changing page-owned DOM
@@ -31,7 +31,8 @@ Online learning has exploded, but video platforms cap speed options at 0.5×–2
 ```mermaid
 flowchart LR
     P[Compact popup] --> BG[Background service worker]
-    BG -->|one elected frame| CS[Content script]
+    BG -->|one elected frame| BS[Lightweight bootstrap]
+    BS -->|media found| CS[Lazy content runtime]
     CS --> MO[Media and shadow-root observer]
     MO --> M[HTML media elements]
     CS -->|one active-media portal| UI[Closed-shadow controller]
@@ -42,7 +43,8 @@ flowchart LR
 **Components:**
 
 - **Background service worker** — manages state and routes each popup/command action to one ranked media frame
-- **Content scripts** — discover dynamic and open-shadow media, arbitrate the active player, and batch local accounting
+- **Content bootstrap** — detects light/open-shadow media in every frame without reading settings or parsing feature code
+- **Lazy content runtime** — discovers media, arbitrates the active player, and batches local accounting only on media pages
 - **Compact popup** — current-video play/pause, remaining time, presets, speed step, and time-saved status
 - **Options page** — advanced behavior, appearance, shortcuts, site rules, and import/export
 - **Speed memory** — resolves URL, site, and remembered speeds from one cached settings snapshot per frame
@@ -68,6 +70,16 @@ Implementation uses the standard `HTMLMediaElement.playbackRate` API with fallba
 - Splits large synced collections under Chrome Sync item quotas and migrates the legacy storage shape.
 - Ships complete English, Spanish, Brazilian Portuguese, French, German, and Japanese catalogues.
 - Adds a loaded-extension Chromium suite covering hostile CSS, 42-media stress, open shadow roots, frames, popup routing, storage, cleanup, and YouTube smoke testing.
+
+## v1.7 Performance and Test Update
+
+- Replaces the always-injected 116KB feature runtime with a 7.6KB bootstrap and parallel lazy modules. Empty pages never parse the controller runtime or read settings.
+- Caches one normalized Sync snapshot per service-worker lifetime, patches external scalar changes in place, and keeps local time-saved statistics out of content-frame startup.
+- Writes only changed Sync collection chunks; saving one site speed no longer resubmits unrelated rules and settings.
+- Reuses short-lived media geometry snapshots, coalesces media arbitration, shares one resize observer, and avoids rebuilding unchanged controller HTML.
+- Replaces one-second all-media time-saved polling with event/lifecycle accrual and a 30-second persistence boundary.
+- Adds directly tested content ranking, visibility, enforcement, silence, and accounting logic; the automated suite now covers lazy-load races, disabled/blocked activation, audio-only pages, worker caching, write amplification, and context invalidation.
+- Adds `npm run benchmark` for repeatable empty-page, 20-frame, first-media, and 40-media measurements.
 
 ## Tech Stack
 
@@ -97,6 +109,8 @@ npm test
 npm run check
 npm run check:full
 npm run test:e2e
+npm run test:coverage
+npm run benchmark
 npm run test:manual
 ```
 

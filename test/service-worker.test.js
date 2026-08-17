@@ -8,16 +8,20 @@ const vm = require('node:vm');
 const VSCSettings = require('../shared/settings.js');
 
 function clone(value) {
+  if (value === undefined) return undefined;
   return JSON.parse(JSON.stringify(value));
 }
 
 function createStorageArea(initial = {}) {
   const data = clone(initial);
+  const getCalls = [];
   const setCalls = [];
   return {
     data,
+    getCalls,
     setCalls,
     async get(keys) {
+      getCalls.push(clone(keys));
       if (keys == null) return clone(data);
       if (typeof keys === 'string') return { [keys]: clone(data[keys]) };
       if (Array.isArray(keys)) {
@@ -47,6 +51,7 @@ function createHarness(syncInitial = {}, localInitial = {}, sessionInitial = {})
   let commandListener;
   let tabRemovedListener;
   let tabUpdatedListener;
+  let storageChangedListener;
   const sync = createStorageArea(syncInitial);
   const local = createStorageArea(localInitial);
   const session = createStorageArea(sessionInitial);
@@ -59,7 +64,12 @@ function createHarness(syncInitial = {}, localInitial = {}, sessionInitial = {})
     static now() { return now; }
   }
   const chrome = {
-    storage: { sync, local, session },
+    storage: {
+      sync,
+      local,
+      session,
+      onChanged: { addListener(listener) { storageChangedListener = listener; } }
+    },
     runtime: {
       onInstalled: { addListener(listener) { installedListener = listener; } },
       onMessage: { addListener(listener) { messageListener = listener; } }
@@ -106,6 +116,15 @@ function createHarness(syncInitial = {}, localInitial = {}, sessionInitial = {})
     },
     setActiveTabs(tabs) { activeTabs = tabs; },
     advanceTime(milliseconds) { now += milliseconds; },
+    changeSync(updates) {
+      const changes = {};
+      for (const [key, newValue] of Object.entries(updates)) {
+        changes[key] = { oldValue: clone(sync.data[key]), newValue: clone(newValue) };
+        if (newValue === undefined) delete sync.data[key];
+        else sync.data[key] = clone(newValue);
+      }
+      storageChangedListener(changes, 'sync');
+    },
     setFrameResponder(responder) { frameResponder = responder; },
     runCommand(command) { return commandListener(command); },
     removeTab(tabId) { return tabRemovedListener(tabId); },
@@ -134,6 +153,24 @@ test('message handler merges concurrent collection writes without dropping entri
   });
 });
 
+test('saving one collection writes only its chunks and the shared index', async () => {
+  const harness = createHarness({
+    enabled: true,
+    blacklist: ['blocked.example'],
+    savedSpeeds: { 'existing.example': 1.5 }
+  });
+  await harness.install({ reason: 'update' });
+  harness.sync.setCalls.length = 0;
+
+  const response = await harness.send({ type: 'saveSpeed', hostname: 'new.example', speed: 2 });
+  assert.equal(response.success, true);
+  const writtenKeys = Object.keys(harness.sync.setCalls.at(-1));
+  assert.ok(writtenKeys.includes('__vscCollectionIndex'));
+  assert.ok(writtenKeys.some(key => key.startsWith('__vscChunk:savedSpeeds:')));
+  assert.equal(writtenKeys.some(key => key.startsWith('__vscChunk:blacklist:')), false);
+  assert.equal(writtenKeys.includes('enabled'), false);
+});
+
 test('targeted settings updates preserve independently changing collections', async () => {
   const harness = createHarness({ enabled: true, savedSpeeds: { 'example.com': 2 } });
   const response = await harness.send({ type: 'updateSettings', updates: { enabled: false, unknown: 'ignored' } });
@@ -145,6 +182,54 @@ test('targeted settings updates preserve independently changing collections', as
   assert.equal(harness.sync.data.unknown, undefined);
   assert.equal(typeof harness.sync.data.lastSyncTime, 'number');
   assert.deepEqual(Object.keys(harness.sync.setCalls.at(-1)).sort(), ['enabled', 'lastSyncTime']);
+});
+
+test('content settings reuse one Sync snapshot and skip popup-only local statistics', async () => {
+  const harness = createHarness({ enabled: true, speedStep: 0.25 }, { timeSaved: 42 });
+
+  const first = await harness.send({ type: 'getContentSettings' });
+  const second = await harness.send({ type: 'getContentSettings' });
+  assert.equal(first.speedStep, 0.25);
+  assert.equal(second.enabled, true);
+  assert.equal(harness.sync.getCalls.length, 1);
+  assert.equal(harness.local.getCalls.length, 0);
+
+  const popupFirst = await harness.send({ type: 'getSettings' });
+  const popupSecond = await harness.send({ type: 'getSettings' });
+  assert.equal(popupFirst.timeSaved, 42);
+  assert.equal(popupSecond.timeSaved, 42);
+  assert.equal(harness.sync.getCalls.length, 1);
+  assert.equal(harness.local.getCalls.length, 1);
+});
+
+test('external scalar Sync changes patch the cache while chunk changes invalidate it', async () => {
+  const harness = createHarness({ enabled: true });
+  await harness.send({ type: 'getContentSettings' });
+  assert.equal(harness.sync.getCalls.length, 1);
+
+  harness.changeSync({ enabled: false });
+  assert.equal((await harness.send({ type: 'getContentSettings' })).enabled, false);
+  assert.equal(harness.sync.getCalls.length, 1, 'scalar change should patch the decoded cache');
+
+  harness.changeSync({
+    __vscCollectionIndex: { savedSpeeds: { type: 'object', count: 1 } },
+    '__vscChunk:savedSpeeds:0': { 'example.com': 2 }
+  });
+  const refreshed = await harness.send({ type: 'getContentSettings' });
+  assert.deepEqual(refreshed.savedSpeeds, { 'example.com': 2 });
+  assert.equal(harness.sync.getCalls.length, 2, 'encoded collection change should reload the snapshot');
+});
+
+test('updated cached settings survive a service-worker restart', async () => {
+  const firstWorker = createHarness({ enabled: true });
+  await firstWorker.send({ type: 'getContentSettings' });
+  const updated = await firstWorker.send({ type: 'updateSettings', updates: { enabled: false } });
+  assert.equal(updated.success, true);
+
+  const restartedWorker = createHarness(firstWorker.sync.data);
+  const reloaded = await restartedWorker.send({ type: 'getContentSettings' });
+  assert.equal(reloaded.enabled, false);
+  assert.equal(restartedWorker.sync.getCalls.length, 1);
 });
 
 test('import normalizes unsafe values and keeps time saved in local storage', async () => {
@@ -240,6 +325,18 @@ test('largest player wins when no frame is playing, with the top frame breaking 
   await harness.report(1, 2, { hasMedia: true, playing: false, area: 300 * 250, isTop: false });
   await harness.runCommand('reset-speed');
   assert.equal(harness.sentMessages.at(-1).frameId, 0);
+});
+
+test('identical frame reports do not rewrite session storage', async () => {
+  const harness = createHarness();
+  const state = { hasMedia: true, playing: false, area: 640 * 360, isTop: true };
+
+  await harness.report(20, 0, state);
+  await harness.report(20, 0, { ...state });
+  assert.equal(harness.session.setCalls.length, 1);
+
+  await harness.report(20, 0, { ...state, playing: true });
+  assert.equal(harness.session.setCalls.length, 2);
 });
 
 test('paused embedded players remain routable until an explicit lifecycle update', async () => {

@@ -1,7 +1,16 @@
 // Video Speed Controller Pro - Content Script
 
-(function() {
+window.vscRuntimeReady = (async function() {
   'use strict';
+
+  const {
+    advanceSilenceState,
+    calculateTimeSaved,
+    decideSpeedEnforcement,
+    pickActiveCandidate,
+    summarizeFrameCandidates,
+    visibleArea
+  } = await window.vscContentLogicReady;
 
   // Prevent multiple injections
   if (window.vscInitialized) return;
@@ -16,11 +25,13 @@
   let sharedController = null;
   let sharedControllerHost = null;
   let controllerStylePromise = null;
-  let controllerResizeObserver = null;
+  let mediaResizeObserver = null;
   let controllerPositionFrame = null;
   let controllerPositionListenersBound = false;
   let controllerManualOffset = null;
+  let controllerRenderedMode = null;
   let activeMediaRefreshQueued = false;
+  let mediaCandidateSnapshot = null;
   let isBlocked = false;
   let contextInvalidated = false;
   let extensionActive = false;
@@ -36,6 +47,7 @@
   let urlPollIntervalMs = null;
   const URL_POLL_VISIBLE_MS = 1000;
   const URL_POLL_HIDDEN_MS = 5000;
+  const MEDIA_SNAPSHOT_TTL_MS = 500;
 
   const DEBUG = false;
   function debug(...args) {
@@ -62,12 +74,13 @@
   let autoHideTimers = new Map(); // Map<controller, timeoutId>
 
   // Time tracking
-  let timeTrackingInterval = null;
-  let lastTrackTime = Date.now();
+  const timeTrackingStates = new Map();
   let pendingTimeSaved = 0;
   let timeSavedFlushTimer = null;
+  let timeSavedFlushQueue = Promise.resolve();
   let timeTrackingLifecycleBound = false;
   const TIME_SAVED_FLUSH_MS = 30 * 1000;
+  const TIME_SAVED_SAMPLE_CAP_MS = TIME_SAVED_FLUSH_MS * 2;
 
   // URL tracking for SPAs
   let lastUrl = window.location.href;
@@ -116,6 +129,7 @@
   const FRAME_REPORT_DELAY_MS = 250;
   let frameReportTimer = null;
   let frameHasReportedMedia = false;
+  let lastReportedFrameState = null;
 
   // Media can enter the DOM before layout or expand from a thumbnail later.
   // One shared observer replaces per-element retry timers and wakes only when
@@ -162,10 +176,11 @@
 
     debug('Video Speed Pro: Extension context invalidated, cleaning up');
 
-    stopTimeTracking();
+    stopAllTimeTracking();
     stopSilenceMonitor();
     if (domObserver) domObserver.disconnect();
     clearAllDeferredMedia();
+    clearMediaGeometryObserver();
     stopUrlPoll();
 
     // Clear auto-hide timers
@@ -231,17 +246,7 @@
       return;
     }
 
-    try {
-      if (!messageListenerBound) {
-        chrome.runtime.onMessage.addListener(handleMessage);
-        messageListenerBound = true;
-      }
-    } catch (e) {
-      if (e.message?.includes('Extension context invalidated')) handleContextInvalidated();
-      return;
-    }
-
-    settings = await sendMessage({ type: 'getSettings' });
+    settings = await sendMessage({ type: 'getContentSettings' });
     if (!settings || Object.keys(settings).length === 0) {
       console.warn('Video Speed Pro: Failed to load settings, using safe defaults');
       settings = {
@@ -306,9 +311,10 @@
     cancelShadowScans();
     clearAllDeferredMedia();
     [...mediaElements.keys()].forEach(media => detachController(media, { preserveAudio: true }));
+    clearMediaGeometryObserver();
     destroyControllerPortal();
     stopSilenceMonitor();
-    stopTimeTracking();
+    stopAllTimeTracking();
     removePipIndicator();
     closeContextMenu();
     reportMediaState();
@@ -469,6 +475,16 @@
         });
         break;
       }
+    }
+  }
+
+  function bindRuntimeMessageListener() {
+    if (messageListenerBound || contextInvalidated) return;
+    try {
+      chrome.runtime.onMessage.addListener(handleMessage);
+      messageListenerBound = true;
+    } catch (error) {
+      if (error.message?.includes('Extension context invalidated')) handleContextInvalidated();
     }
   }
 
@@ -653,6 +669,7 @@
   // Set up mutation observer for dynamic content
   function setupObserver() {
     const observerCallback = (mutations) => {
+      invalidateMediaCandidateSnapshot();
       let sawRemoval = false;
 
       for (const mutation of mutations) {
@@ -764,6 +781,29 @@
     deferredMediaResizeObserver = null;
   }
 
+  function invalidateMediaCandidateSnapshot() {
+    mediaCandidateSnapshot = null;
+  }
+
+  function observeMediaGeometry(media) {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (!mediaResizeObserver) {
+      mediaResizeObserver = new ResizeObserver(entries => {
+        invalidateMediaCandidateSnapshot();
+        if (entries.some(entry => entry.target === controllerMedia)) scheduleControllerPosition();
+        scheduleActiveMediaRefresh();
+        reportMediaState();
+      });
+    }
+    mediaResizeObserver.observe(media);
+  }
+
+  function clearMediaGeometryObserver() {
+    mediaResizeObserver?.disconnect();
+    mediaResizeObserver = null;
+    invalidateMediaCandidateSnapshot();
+  }
+
   // Attach controller to media element
   function attachController(media) {
     if (mediaElements.has(media)) return;
@@ -808,6 +848,8 @@
       // latest activity so a feed's new player wins immediately.
       lastInteractionAt: !media.paused && !media.ended ? attachedAt : 0
     });
+    invalidateMediaCandidateSnapshot();
+    observeMediaGeometry(media);
 
     // Apply pitch preference before UI is created
     applyPreservePitchSetting(media);
@@ -817,17 +859,19 @@
 
     // Track active element on play
     const handlePlay = () => {
+      invalidateMediaCandidateSnapshot();
       markMediaActive(media, true);
       if (audioContextMap.has(media)) applyVolumeBoostToMedia(media);
-      startTimeTracking();
+      startTimeTracking(media);
       startSilenceMonitor(media);
       reportMediaState();
     };
     const handlePause = () => {
-      if (![...mediaElements.keys()].some(element => !element.paused && !element.ended)) stopTimeTracking();
+      invalidateMediaCandidateSnapshot();
+      stopTimeTracking(media);
       if (silenceMonitorMedia === media) stopSilenceMonitor();
       suspendSharedAudioContextIfIdle();
-      refreshActiveMedia();
+      scheduleActiveMediaRefresh();
       reportMediaState();
     };
     const handleInteraction = () => markMediaActive(media, true);
@@ -835,6 +879,7 @@
     // Update controller when speed changes externally, and take the speed back
     // if the site reset it out from under us.
     const handleRateChange = () => {
+      sampleTimeSavedForMedia(media);
       enforceDesiredSpeed(media);
       updateControllerDisplay(media);
       updatePipIndicator();
@@ -856,7 +901,7 @@
       handleInteraction,
       handleTimelineChange
     };
-    if (!media.paused && !media.ended) startTimeTracking();
+    if (!media.paused && !media.ended) startTimeTracking(media);
 
     // Set up Picture-in-Picture support
     if (media.tagName === 'VIDEO') {
@@ -885,7 +930,10 @@
   // Detach controller from media element
   function detachController(media, { preserveAudio = false } = {}) {
     if (!mediaElements.has(media)) return;
+    stopTimeTracking(media);
+    mediaResizeObserver?.unobserve(media);
     mediaElements.delete(media);
+    invalidateMediaCandidateSnapshot();
     if (activeElement === media) activeElement = null;
     if (controllerMedia === media) controllerMedia = null;
     if (media._vscCoreListeners) {
@@ -921,7 +969,7 @@
     delete media._vscCorrectionCount;
     delete media._vscEnforceCooldownUntil;
     if (mediaElements.size === 0) {
-      stopTimeTracking();
+      clearMediaGeometryObserver();
       destroyControllerPortal();
     } else {
       scheduleActiveMediaRefresh();
@@ -935,9 +983,10 @@
     // A sequence is deterministic even when two play/pointer events land in
     // the same millisecond (common while a feed swaps players).
     if (interacted) metadata.lastInteractionAt = ++mediaActivitySequence;
+    invalidateMediaCandidateSnapshot();
     activeElement = media;
     if (volumeBoostLevel > 100) applyVolumeBoostToMedia(media);
-    showControllerForMedia(media);
+    scheduleActiveMediaRefresh();
   }
 
   function refreshActiveMedia() {
@@ -970,7 +1019,9 @@
       // Style loading is asynchronous. Several videos can become active while
       // it is in flight, so always choose the current arbitration winner rather
       // than letting the oldest pending request steal the shared portal.
-      const currentMedia = findActiveMedia();
+      const currentMedia = activeElement && mediaElements.has(activeElement) && activeElement.isConnected
+        ? activeElement
+        : findActiveMedia();
       if (currentMedia) retargetController(currentMedia);
       else destroyControllerPortal();
     } catch (error) {
@@ -1070,29 +1121,27 @@
     makeDraggable(controller);
     attachControllerEvents(controller);
     bindControllerPositionListeners();
-    if (typeof ResizeObserver !== 'undefined') {
-      controllerResizeObserver = new ResizeObserver(scheduleControllerPosition);
-    }
     return controller;
   }
 
-  function retargetController(media) {
+  function retargetController(media, { forceRender = false } = {}) {
     if (!sharedController || !mediaElements.has(media) || !media.isConnected) return;
     const changedMedia = controllerMedia !== media;
     controllerMedia = media;
     activeElement = media;
     if (changedMedia) controllerManualOffset = null;
 
-    controllerResizeObserver?.disconnect();
-    controllerResizeObserver?.observe(media);
-
     sharedController.style.opacity = settings.opacity;
     sharedController.style.setProperty('--vsc-bg-color', settings.colorBackground || '#1a1a2e');
     sharedController.style.setProperty('--vsc-accent-color', settings.colorAccent || '#e94560');
     sharedController.classList.toggle('vsc-hidden', Boolean(settings.hideByDefault));
-    sharedController.innerHTML = settings.controllerMode === 'minimal'
-      ? createMinimalUI(media)
-      : createFullUI(media);
+    const needsRender = forceRender || changedMedia || controllerRenderedMode !== settings.controllerMode;
+    if (needsRender) {
+      sharedController.innerHTML = settings.controllerMode === 'minimal'
+        ? createMinimalUI(media)
+        : createFullUI(media);
+      controllerRenderedMode = settings.controllerMode;
+    }
 
     updateControllerDisplay(media);
     updateControllerTimeline(media);
@@ -1117,6 +1166,7 @@
   }
 
   function handleControllerViewportChange() {
+    invalidateMediaCandidateSnapshot();
     scheduleControllerPosition();
     reportMediaState();
   }
@@ -1161,8 +1211,6 @@
   function destroyControllerPortal() {
     if (controllerPositionFrame !== null) cancelAnimationFrame(controllerPositionFrame);
     controllerPositionFrame = null;
-    controllerResizeObserver?.disconnect();
-    controllerResizeObserver = null;
     unbindControllerPositionListeners();
     if (sharedController) {
       const timer = autoHideTimers.get(sharedController);
@@ -1174,6 +1222,7 @@
     sharedControllerHost = null;
     controllerMedia = null;
     controllerManualOffset = null;
+    controllerRenderedMode = null;
     dragState = null;
   }
 
@@ -1491,32 +1540,35 @@
   // ratechange it triggers exits at the equality check below.
   function enforceDesiredSpeed(media) {
     const desired = media._vscDesiredSpeed;
-    if (typeof desired !== 'number') return;
-    if (media._vscSilenceActive) return;
-    if (Math.abs(media.playbackRate - desired) < SPEED_EPSILON) return;
-
     const now = Date.now();
-    // Force mode defends the speed indefinitely. Otherwise only defend the rate
-    // we just set, so the site's own speed menu keeps working.
-    if (!settings?.forceSpeed && now >= (media._vscReassertUntil || 0)) return;
-    if (now < (media._vscEnforceCooldownUntil || 0)) return;
+    const decision = decideSpeedEnforcement({
+      desired,
+      current: media.playbackRate,
+      silenceActive: media._vscSilenceActive,
+      forceSpeed: settings?.forceSpeed,
+      now,
+      reassertUntil: media._vscReassertUntil,
+      cooldownUntil: media._vscEnforceCooldownUntil,
+      correctionStart: media._vscCorrectionStart,
+      correctionCount: media._vscCorrectionCount
+    }, {
+      epsilon: SPEED_EPSILON,
+      correctionWindowMs: SPEED_CORRECTION_WINDOW_MS,
+      correctionLimit: SPEED_CORRECTION_LIMIT,
+      cooldownMs: SPEED_CORRECTION_COOLDOWN_MS
+    });
+    media._vscCorrectionStart = decision.correctionStart;
+    media._vscCorrectionCount = decision.correctionCount;
+    media._vscEnforceCooldownUntil = decision.cooldownUntil;
 
-    if (now - (media._vscCorrectionStart || 0) > SPEED_CORRECTION_WINDOW_MS) {
-      media._vscCorrectionStart = now;
-      media._vscCorrectionCount = 0;
-    }
-
-    media._vscCorrectionCount = (media._vscCorrectionCount || 0) + 1;
-    if (media._vscCorrectionCount > SPEED_CORRECTION_LIMIT) {
+    if (decision.action === 'cooldown') {
       // Either the page rewrites the rate faster than we can correct it, or the
       // media clamps our value and never reaches it. Back off instead of
       // spinning on ratechange.
-      media._vscEnforceCooldownUntil = now + SPEED_CORRECTION_COOLDOWN_MS;
       debug('Video Speed Pro: Backing off speed enforcement at', desired);
       return;
     }
-
-    applyPlaybackRate(media, desired);
+    if (decision.action === 'apply') applyPlaybackRate(media, desired);
   }
 
   // Set playback speed
@@ -2243,22 +2295,20 @@
     const rms = Math.sqrt(sumSquares / samples.length);
     const silent = rms <= (settings.silenceThreshold || 0.02);
     const now = performance.now();
-
-    if (silent) {
-      if (silenceStartedAt === null) silenceStartedAt = now;
-      const minimumMs = (settings.silenceMinDuration || 1) * 1000;
-      if (!silenceAccelerated && now - silenceStartedAt >= minimumMs) {
-        media._vscSilenceActive = true;
-        silenceAccelerated = true;
-        applyPlaybackRate(media, Math.max(media._vscDesiredSpeed || media.playbackRate, settings.silenceSkipSpeed || 4));
-        updateControllerDisplay(media);
-      }
-      return;
-    }
-
-    silenceStartedAt = null;
-    if (silenceAccelerated) {
-      silenceAccelerated = false;
+    const transition = advanceSilenceState({
+      silent,
+      now,
+      startedAt: silenceStartedAt,
+      accelerated: silenceAccelerated,
+      minimumMs: (settings.silenceMinDuration || 1) * 1000
+    });
+    silenceStartedAt = transition.startedAt;
+    silenceAccelerated = transition.accelerated;
+    if (transition.action === 'accelerate') {
+      media._vscSilenceActive = true;
+      applyPlaybackRate(media, Math.max(media._vscDesiredSpeed || media.playbackRate, settings.silenceSkipSpeed || 4));
+      updateControllerDisplay(media);
+    } else if (transition.action === 'restore') {
       media._vscSilenceActive = false;
       applyPlaybackRate(media, media._vscDesiredSpeed || 1);
       updateControllerDisplay(media);
@@ -2506,7 +2556,7 @@
       const nodes = audioContextMap.get(media);
       if (nodes) nodes.gainNode.gain.value = volumeBoostLevel / 100;
     });
-    if (controllerMedia && sharedController) retargetController(controllerMedia);
+    if (controllerMedia && sharedController) retargetController(controllerMedia, { forceRender: true });
   }
 
   // Toggle controller visibility
@@ -2555,29 +2605,34 @@
   // Describe this frame's media so the background can elect one frame per tab.
   // Without this every frame receives every command, so a single keypress can
   // hit the real video and a video ad in an iframe at the same time.
-  function computeFrameMediaState() {
-    let playing = false;
-    let playingArea = 0;
-    let idleArea = 0;
-
-    for (const [media] of mediaElements) {
-      if (!media.isConnected) continue;
-      const rect = media.getBoundingClientRect();
-      const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
-      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
-      const area = visibleWidth * visibleHeight;
-      if (!media.paused && !media.ended) {
-        playing = true;
-        playingArea = Math.max(playingArea, area);
-      } else {
-        idleArea = Math.max(idleArea, area);
-      }
+  function measureMediaCandidates() {
+    const now = performance.now();
+    if (mediaCandidateSnapshot && now - mediaCandidateSnapshot.measuredAt < MEDIA_SNAPSHOT_TTL_MS) {
+      return mediaCandidateSnapshot.candidates;
     }
+    const candidates = [];
+    for (const [media, metadata] of mediaElements) {
+      if (!media.isConnected) continue;
+      candidates.push({
+        media,
+        playing: !media.paused && !media.ended,
+        ended: media.ended,
+        lastInteractionAt: metadata.lastInteractionAt || 0,
+        area: visibleArea(media.getBoundingClientRect(), window.innerWidth, window.innerHeight),
+        attachedAt: metadata.attachedAt || 0
+      });
+    }
+    mediaCandidateSnapshot = { measuredAt: now, candidates };
+    return candidates;
+  }
+
+  function computeFrameMediaState() {
+    const summary = summarizeFrameCandidates(measureMediaCandidates());
 
     return {
       hasMedia: extensionActive && !isBlocked && mediaElements.size > 0,
-      playing,
-      area: playing ? playingArea : idleArea,
+      playing: summary.playing,
+      area: summary.area,
       isTop: window.top === window
     };
   }
@@ -2592,6 +2647,12 @@
       const state = computeFrameMediaState();
       if (!state.hasMedia && !frameHasReportedMedia) return;
       frameHasReportedMedia = state.hasMedia;
+      if (lastReportedFrameState &&
+          lastReportedFrameState.hasMedia === state.hasMedia &&
+          lastReportedFrameState.playing === state.playing &&
+          lastReportedFrameState.area === state.area &&
+          lastReportedFrameState.isTop === state.isTop) return;
+      lastReportedFrameState = state;
       sendMessage({ type: 'reportMediaState', state });
     }, FRAME_REPORT_DELAY_MS);
   }
@@ -2599,27 +2660,7 @@
   // Select media deterministically inside the frame: playing beats paused,
   // then the most recently interacted player wins, then visible area.
   function findActiveMedia() {
-    let best = null;
-    for (const [media, metadata] of mediaElements) {
-      if (!media.isConnected || media.ended) continue;
-      const rect = media.getBoundingClientRect();
-      const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
-      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
-      const candidate = {
-        media,
-        playing: !media.paused,
-        lastInteractionAt: metadata.lastInteractionAt || 0,
-        area: visibleWidth * visibleHeight,
-        attachedAt: metadata.attachedAt || 0
-      };
-      if (!best ||
-          Number(candidate.playing) > Number(best.playing) ||
-          (candidate.playing === best.playing && candidate.lastInteractionAt > best.lastInteractionAt) ||
-          (candidate.playing === best.playing && candidate.lastInteractionAt === best.lastInteractionAt && candidate.area > best.area) ||
-          (candidate.playing === best.playing && candidate.lastInteractionAt === best.lastInteractionAt && candidate.area === best.area && candidate.attachedAt < best.attachedAt)) {
-        best = candidate;
-      }
-    }
+    const best = pickActiveCandidate(measureMediaCandidates().filter(candidate => !candidate.ended));
     return best?.media || null;
   }
 
@@ -2950,68 +2991,81 @@
     }
   }
 
-  // Track once per second only while media is playing.
-  function startTimeTracking() {
-    if (timeTrackingInterval || contextInvalidated || mediaElements.size === 0) return;
+  // Accrue on media/lifecycle events rather than scanning every media element
+  // once per second. A 30-second boundary samples long uninterrupted playback
+  // before the existing batched write, so accounting remains current without a
+  // perpetual hot timer.
+  function startTimeTracking(media) {
+    if (!media || contextInvalidated || !extensionActive || media.paused || media.ended) return;
     bindTimeTrackingLifecycle();
-    lastTrackTime = Date.now();
-    timeTrackingInterval = setInterval(trackTimeSaved, 1000);
-  }
-
-  function stopTimeTracking({ flush = true } = {}) {
-    if (timeTrackingInterval) {
-      clearInterval(timeTrackingInterval);
-      timeTrackingInterval = null;
-    }
-    if (flush) flushTimeSaved();
-  }
-
-  function trackTimeSaved() {
-    if (contextInvalidated || !extensionActive) {
-      stopTimeTracking();
-      return;
-    }
-
     const now = Date.now();
-    const elapsed = Math.min(2, Math.max(0, (now - lastTrackTime) / 1000));
-    lastTrackTime = now;
-    if (document.hidden) return;
-
-    let totalTimeSaved = 0;
-    let hasPlayingMedia = false;
-    for (const [media] of mediaElements) {
-      if (!media.paused && !media.ended) {
-        hasPlayingMedia = true;
-        if (media.playbackRate > 1) totalTimeSaved += elapsed * (media.playbackRate - 1);
-      }
-    }
-
-    if (!hasPlayingMedia) {
-      stopTimeTracking();
-      return;
-    }
-    if (totalTimeSaved > 0) updateTimeSaved(totalTimeSaved);
+    const existing = timeTrackingStates.get(media);
+    if (existing) sampleTimeSavedForMedia(media, now);
+    else timeTrackingStates.set(media, {
+      sampledAt: now,
+      playbackRate: media.playbackRate,
+      wasVisible: !document.hidden
+    });
+    scheduleTimeSavedFlush();
   }
 
-  function updateTimeSaved(seconds) {
-    if (contextInvalidated || !Number.isFinite(seconds) || seconds <= 0) return;
-    pendingTimeSaved += seconds;
-    if (!timeSavedFlushTimer) {
-      timeSavedFlushTimer = setTimeout(flushTimeSaved, TIME_SAVED_FLUSH_MS);
+  function sampleTimeSavedForMedia(media, now = Date.now()) {
+    const state = timeTrackingStates.get(media);
+    if (!state) return;
+    const elapsedMs = Math.min(TIME_SAVED_SAMPLE_CAP_MS, Math.max(0, now - state.sampledAt));
+    // visibilitychange fires after document.hidden changes. Remembering which
+    // state owned the elapsed segment preserves the final visible interval and
+    // still excludes time accumulated while the tab was hidden.
+    if (state.wasVisible) {
+      const saved = calculateTimeSaved(elapsedMs / 1000, state.playbackRate);
+      if (saved > 0) pendingTimeSaved += saved;
+    }
+    state.sampledAt = now;
+    state.playbackRate = media.playbackRate;
+    state.wasVisible = !document.hidden;
+  }
+
+  function sampleAllTimeSaved(now = Date.now()) {
+    for (const media of timeTrackingStates.keys()) sampleTimeSavedForMedia(media, now);
+  }
+
+  function stopTimeTracking(media, { flush = true } = {}) {
+    if (!media || !timeTrackingStates.has(media)) return;
+    sampleTimeSavedForMedia(media);
+    timeTrackingStates.delete(media);
+    if (flush && timeTrackingStates.size === 0) flushTimeSaved({ sample: false });
+  }
+
+  function stopAllTimeTracking({ flush = true } = {}) {
+    sampleAllTimeSaved();
+    timeTrackingStates.clear();
+    if (flush) flushTimeSaved({ sample: false });
+    else if (timeSavedFlushTimer) {
+      clearTimeout(timeSavedFlushTimer);
+      timeSavedFlushTimer = null;
     }
   }
 
-  async function flushTimeSaved() {
+  function scheduleTimeSavedFlush() {
+    if (timeSavedFlushTimer || contextInvalidated || document.hidden) return;
+    if (timeTrackingStates.size === 0 && pendingTimeSaved <= 0) return;
+    timeSavedFlushTimer = setTimeout(flushTimeSaved, TIME_SAVED_FLUSH_MS);
+  }
+
+  function flushTimeSaved({ sample = true } = {}) {
+    if (sample) sampleAllTimeSaved();
     if (timeSavedFlushTimer) clearTimeout(timeSavedFlushTimer);
     timeSavedFlushTimer = null;
-    if (pendingTimeSaved <= 0 || contextInvalidated) return;
-    const seconds = pendingTimeSaved;
-    pendingTimeSaved = 0;
-    const response = await sendMessage({ type: 'addTimeSaved', seconds });
-    if (response?.success !== true && !contextInvalidated) {
-      pendingTimeSaved += seconds;
-      if (!timeSavedFlushTimer) timeSavedFlushTimer = setTimeout(flushTimeSaved, TIME_SAVED_FLUSH_MS);
-    }
+    const operation = timeSavedFlushQueue.then(async () => {
+      if (pendingTimeSaved <= 0 || contextInvalidated) return;
+      const seconds = pendingTimeSaved;
+      pendingTimeSaved = 0;
+      const response = await sendMessage({ type: 'addTimeSaved', seconds });
+      if (response?.success !== true && !contextInvalidated) pendingTimeSaved += seconds;
+    });
+    timeSavedFlushQueue = operation.catch(() => {});
+    operation.then(scheduleTimeSavedFlush, scheduleTimeSavedFlush);
+    return operation;
   }
 
   function bindTimeTrackingLifecycle() {
@@ -3019,15 +3073,21 @@
     timeTrackingLifecycleBound = true;
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        trackTimeSaved();
-        flushTimeSaved();
+        sampleAllTimeSaved();
+        flushTimeSaved({ sample: false });
       } else {
-        lastTrackTime = Date.now();
+        const now = Date.now();
+        for (const [media, state] of timeTrackingStates) {
+          state.sampledAt = now;
+          state.playbackRate = media.playbackRate;
+          state.wasVisible = true;
+        }
+        scheduleTimeSavedFlush();
       }
     });
     window.addEventListener('pagehide', () => {
-      trackTimeSaved();
-      flushTimeSaved();
+      sampleAllTimeSaved();
+      flushTimeSaved({ sample: false });
     });
   }
 
@@ -3135,10 +3195,19 @@
     urlPollIntervalMs = null;
   }
 
-  // Initialize when DOM is ready
+  // Expose a narrow bridge for messages that reached the lightweight bootstrap
+  // while this module was still loading. Normal messages continue to use the
+  // runtime listener registered by init().
+  window.vscRuntimeDispatchMessage = handleMessage;
+  window.vscBindRuntimeMessageListener = bindRuntimeMessageListener;
+
+  // The bootstrap waits for this outer async module promise before disconnecting
+  // its detector, closing the mutation gap across both parallel module fetches
+  // and asynchronous settings/observer initialization.
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+    await new Promise((resolve) => {
+      document.addEventListener('DOMContentLoaded', resolve, { once: true });
+    });
   }
+  await init();
 })();

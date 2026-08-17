@@ -1,13 +1,15 @@
 {
   "name": "video-speed-controller-extension",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "scripts": {
+    "benchmark": "node scripts/benchmark-extension.js",
     "check": "npm run check:syntax && npm test",
     "check:full": "npm run check && npm run test:e2e",
-    "check:syntax": "node --check background/service-worker.js && node --check content/content.js && node --check popup/popup.js && node --check popup/compact.js && node --check shared/settings.js && node scripts/validate-manifest.js",
+    "check:syntax": "node --check background/service-worker.js && node --check content/bootstrap.js && node --check content/logic.js && node --check content/content.js && node --check popup/popup.js && node --check popup/compact.js && node --check shared/settings.js && node --check scripts/benchmark-extension.js && node scripts/validate-manifest.js",
     "package": "npm run check:full && node scripts/package-extension.js",
     "test:e2e": "node scripts/test-extension-e2e.js",
+    "test:coverage": "node --experimental-test-coverage --test test/*.test.js",
     "test:manual": "node scripts/serve-test-page.js",
     "test": "node --test test/*.test.js"
   },

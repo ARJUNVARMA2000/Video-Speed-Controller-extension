@@ -7,6 +7,9 @@ const path = require('node:path');
 const projectRoot = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, 'manifest.json'), 'utf8'));
 const packageMetadata = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+const contentScripts = manifest.content_scripts || [];
+const bootstrapPath = 'content/bootstrap.js';
+const runtimePath = 'content/content.js';
 
 function collectStrings(value, strings = []) {
   if (typeof value === 'string') strings.push(value);
@@ -18,6 +21,15 @@ function collectStrings(value, strings = []) {
 assert.equal(manifest.manifest_version, 3, 'manifest_version must be 3');
 assert.match(manifest.version, /^\d+\.\d+\.\d+$/, 'version must use x.y.z format');
 assert.equal(manifest.version, packageMetadata.version, 'manifest and package versions must match');
+
+const staticallyInjectedJavaScript = contentScripts.flatMap(script => script.js || []);
+assert.deepEqual(staticallyInjectedJavaScript, [bootstrapPath], 'only the lightweight bootstrap may be statically injected');
+const bootstrapBytes = fs.statSync(path.join(projectRoot, bootstrapPath)).size;
+assert.ok(bootstrapBytes <= 8 * 1024, `content bootstrap exceeds its 8 KB budget (${bootstrapBytes} bytes)`);
+const runtimeResource = (manifest.web_accessible_resources || [])
+  .find(entry => entry.resources?.includes(runtimePath));
+assert.ok(runtimeResource, 'lazy content runtime must be web accessible');
+assert.equal(runtimeResource.use_dynamic_url, true, 'lazy runtime must use a per-session dynamic URL');
 
 const referencedFiles = [
   manifest.action?.default_popup,
@@ -56,7 +68,7 @@ if (manifest.default_locale) {
     manifest.options_ui?.page,
     'popup/compact.js',
     'popup/popup.js',
-    'content/content.js'
+    runtimePath
   ].filter(Boolean).map(relativePath => fs.readFileSync(path.join(projectRoot, relativePath), 'utf8'));
   const referenced = localizedSources.flatMap(source => [
     ...[...source.matchAll(/data-i18n(?:-aria|-placeholder|-title)?="([^"]+)"/g)].map(match => match[1]),
@@ -89,5 +101,5 @@ if (manifest.default_locale) {
   locales.push(`${manifest.default_locale}: ${Object.keys(catalog).length} messages, ${referenced.length} references, ${unused.length} unused`);
 }
 
-console.log(`Manifest ${manifest.version} validated (${referencedFiles.length} referenced assets).`);
+console.log(`Manifest ${manifest.version} validated (${referencedFiles.length} referenced assets; ${bootstrapBytes}-byte bootstrap).`);
 for (const line of locales) console.log(`Locale ${line}`);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "default_locale": "en",
   "description": "__MSG_appDesc__",
   "icons": {
@@ -35,7 +35,7 @@
         "<all_urls>"
       ],
       "js": [
-        "content/content.js"
+        "content/bootstrap.js"
       ],
       "run_at": "document_end",
       "all_frames": true
@@ -44,11 +44,14 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "content/logic.js",
+        "content/content.js",
         "content/controller.css"
       ],
       "matches": [
         "<all_urls>"
-      ]
+      ],
+      "use_dynamic_url": true
     }
   ],
   "commands": {

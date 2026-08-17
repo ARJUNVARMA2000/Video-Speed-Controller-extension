@@ -11,19 +11,41 @@ npm run check:full
 ```
 
 `npm run check` validates JavaScript syntax, manifest assets, all locale catalogues, settings
-normalization, Sync quota/chunk migration, serialized writes, and targeted frame routing.
+normalization, Sync quota/chunk migration, cache invalidation, narrow serialized writes, pure
+content decisions, the always-injected byte budget, and targeted frame routing.
 
 `npm run test:e2e` launches Chromium with the unpacked extension and verifies:
 
-- no controller/CSS portal on a page without media;
+- only the lightweight bootstrap (not the logic/runtime modules) on a page without media;
+- settings changed before lazy activation and multiple media inserted during module loading;
 - one fixed closed-shadow portal for the active media, with no wrappers or media reparenting;
 - dynamic and open-shadow media discovery, deterministic active-player keyboard control, and exact modifier chords;
 - speed reassertion after a simulated site reset and user override during silence acceleration;
 - hostile page CSS isolation and one portal across a 42-media stress page, with a 100 ms frame budget;
 - timer-free thumbnail-media and tiny-frame deferral/growth, plus popup routing to one playing iframe;
 - custom presets, legacy-shaped import, Sync collection chunking, and round-trip reads;
-- 30-second time-saved batching with immediate partial flush on pause; and
+- event-based time-saved accrual with a 30-second write boundary and immediate partial flush on pause;
+- audio-only activation, blocked-site reactivation, and context-invalidation cleanup; and
 - controller cleanup after all media and iframe owners are removed.
+
+Run the deterministic unit coverage report with:
+
+```bash
+npm run test:coverage
+```
+
+## Performance benchmark
+
+```bash
+npm run benchmark
+VSC_BENCH_RUNS=10 npm run benchmark
+```
+
+The benchmark launches unpacked-extension and plain Chromium contexts, warms process caches, and
+reports medians for an empty document, 20 empty frames, first-media controller activation, and a
+40-media insertion. It also fails if an empty page parses either lazy content module. Timing
+results are diagnostic rather than a brittle CI threshold; the bootstrap's 8KB limit and lazy-load
+invariant are deterministic release gates.
 
 The live-site check is deliberately opt-in so normal development does not depend on a third party:
 
@@ -76,7 +98,7 @@ it manually before treating it as an extension regression.
 
 ```bash
 npm run package
-unzip -t dist/video-speed-controller-v1.6.0.zip
+unzip -t dist/video-speed-controller-v1.7.0.zip
 ```
 
 Load the repository root unpacked for development. Upload only the versioned ZIP from `dist/`.
