@@ -1,4 +1,19 @@
 {
+  "actionTitle": {
+    "message": "Video Speed Pro"
+  },
+  "commandToggleController": {
+    "message": "Show or hide the speed controller"
+  },
+  "commandIncreaseSpeed": {
+    "message": "Increase playback speed"
+  },
+  "commandDecreaseSpeed": {
+    "message": "Decrease playback speed"
+  },
+  "commandResetSpeed": {
+    "message": "Reset to normal speed"
+  },
   "a11y_add_allowed_site": {
     "message": "Add allowed site"
   },

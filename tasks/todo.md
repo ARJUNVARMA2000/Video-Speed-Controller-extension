@@ -529,3 +529,22 @@ while any connected media is playing and is suspended only when all connected me
 
 Release metadata and docs are updated to 1.6.0. The release ZIP is built and validated before the
 final commit; Chrome Web Store submission remains a separate signed-in publisher action.
+
+### Post-implementation audit
+
+- [x] Coalesce bulk attach/detach arbitration into one microtask, avoiding repeated O(n²) layout
+      scans and shared-controller rebuilds.
+- [x] Replace zero-size polling and permanent tiny-media skips with one shared `ResizeObserver`;
+      add E2E coverage for a thumbnail that expands into the active player.
+- [x] Preserve explicit speed changes during silence acceleration and retain failed time-saved
+      batches for retry.
+- [x] Keep paused embedded players routable until removal/navigation and across background-worker
+      suspension; prove hour-long idle and full worker restart cases in the service-worker harness.
+- [x] Narrow scalar Chrome Sync writes, debounce continuous appearance controls, localize nested
+      manifest labels, and make E2E a required packaging gate.
+
+**Audit verification:** 23/23 unit/integration tests pass. The expanded E2E suite passed four
+consecutive runs, including explicit-speed recovery from silence mode and thumbnail-to-player
+growth. The 40-video next-frame measurements were 6.8ms, 7.6ms, 7.1ms, and 6.6ms (7.0ms median),
+down from the pre-audit 12.9ms run. `npm run package` now runs that full gate automatically; the
+resulting 124KB `dist/video-speed-controller-v1.6.0.zip` passes `unzip -t`.

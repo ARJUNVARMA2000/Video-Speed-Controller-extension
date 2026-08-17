@@ -1,4 +1,19 @@
 {
+  "actionTitle": {
+    "message": "Video Speed Pro"
+  },
+  "commandToggleController": {
+    "message": "Afficher ou masquer le contrôleur de vitesse"
+  },
+  "commandIncreaseSpeed": {
+    "message": "Augmenter la vitesse de lecture"
+  },
+  "commandDecreaseSpeed": {
+    "message": "Réduire la vitesse de lecture"
+  },
+  "commandResetSpeed": {
+    "message": "Rétablir la vitesse normale"
+  },
   "a11y_add_allowed_site": {
     "message": "Ajouter un site autorisé"
   },

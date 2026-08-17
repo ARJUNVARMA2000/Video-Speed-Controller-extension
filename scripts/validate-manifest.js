@@ -8,6 +8,13 @@ const projectRoot = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, 'manifest.json'), 'utf8'));
 const packageMetadata = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
 
+function collectStrings(value, strings = []) {
+  if (typeof value === 'string') strings.push(value);
+  else if (Array.isArray(value)) value.forEach(item => collectStrings(item, strings));
+  else if (value && typeof value === 'object') Object.values(value).forEach(item => collectStrings(item, strings));
+  return strings;
+}
+
 assert.equal(manifest.manifest_version, 3, 'manifest_version must be 3');
 assert.match(manifest.version, /^\d+\.\d+\.\d+$/, 'version must use x.y.z format');
 assert.equal(manifest.version, packageMetadata.version, 'manifest and package versions must match');
@@ -35,10 +42,13 @@ if (manifest.default_locale) {
   assert.ok(fs.existsSync(catalogPath), `missing default locale catalogue: ${catalogPath}`);
   const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
 
-  for (const value of Object.values(manifest)) {
-    if (typeof value !== 'string') continue;
+  const manifestMessages = [];
+  for (const value of collectStrings(manifest)) {
     const token = value.match(/^__MSG_(.+)__$/);
-    if (token) assert.ok(catalog[token[1]], `manifest references missing message: ${token[1]}`);
+    if (token) {
+      manifestMessages.push(token[1]);
+      assert.ok(catalog[token[1]], `manifest references missing message: ${token[1]}`);
+    }
   }
 
   const localizedSources = [
@@ -52,6 +62,7 @@ if (manifest.default_locale) {
     ...[...source.matchAll(/data-i18n(?:-aria|-placeholder|-title)?="([^"]+)"/g)].map(match => match[1]),
     ...[...source.matchAll(/\bt\(['"]([^'"]+)['"]/g)].map(match => match[1])
   ]);
+  referenced.push(...manifestMessages);
   // Shortcut message keys are derived from action IDs at runtime, so the
   // literal t(...) scanner cannot see them.
   referenced.push(...[

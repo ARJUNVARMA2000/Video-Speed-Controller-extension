@@ -18,6 +18,8 @@ let collectionWriteQueue = Promise.resolve();
 let syncWriteQueue = Promise.resolve();
 let timeSavedWriteQueue = Promise.resolve();
 let timeSavedCache = null;
+let frameStateHydration = null;
+let frameStateMutationQueue = Promise.resolve();
 
 const SYNC_COLLECTIONS = new Set([
   'blacklist',
@@ -172,7 +174,20 @@ function mutateSyncSettings(mutator) {
 }
 
 function writeSyncSettings(updates) {
-  return mutateSyncSettings(current => ({ ...current, ...updates }));
+  const operation = syncWriteQueue.then(async () => {
+    const current = await readSyncSettings();
+    const next = { ...current, ...updates };
+
+    // Validate against the same per-item and total quotas as a full commit,
+    // but do not rewrite every collection chunk for a scalar-only change.
+    buildSyncPayload(next);
+    const touchesCollection = Object.keys(updates).some(key => SYNC_COLLECTIONS.has(key));
+    if (touchesCollection) await commitSyncSnapshot(next);
+    else await chrome.storage.sync.set(updates);
+    return next;
+  });
+  syncWriteQueue = operation.catch(() => {});
+  return operation;
 }
 
 function replaceSyncSettings(settings) {
@@ -181,29 +196,90 @@ function replaceSyncSettings(settings) {
 
 // Per-tab media frame registry. Content scripts run in every frame, so commands
 // have to be routed to one elected frame instead of broadcast to all of them.
-const FRAME_STATE_TTL = 5 * 60 * 1000;
+// Session storage survives normal Manifest V3 worker suspension without leaking
+// this ephemeral state across browser restarts.
 const ACTIVE_FRAME_RELAY_TYPES = new Set(['getActiveState', 'setSpeed', 'togglePlayback']);
-const frameMediaStates = new Map(); // Map<tabId, Map<frameId, { state, updatedAt }>>
+const FRAME_STATE_SESSION_PREFIX = '__vscFrameMediaStates:';
+const frameMediaStates = new Map(); // Map<tabId, Map<frameId, { state }>>
+
+function frameStateSessionKey(tabId) {
+  return `${FRAME_STATE_SESSION_PREFIX}${tabId}`;
+}
+
+async function hydrateFrameMediaStates() {
+  if (frameStateHydration) return await frameStateHydration;
+  frameStateHydration = (async () => {
+    const stored = await chrome.storage.session.get(null);
+    for (const [key, rawFrames] of Object.entries(stored)) {
+      if (!key.startsWith(FRAME_STATE_SESSION_PREFIX) || !rawFrames || typeof rawFrames !== 'object') continue;
+      const tabId = Number(key.slice(FRAME_STATE_SESSION_PREFIX.length));
+      if (!Number.isInteger(tabId)) continue;
+
+      const frames = new Map();
+      for (const [rawFrameId, state] of Object.entries(rawFrames)) {
+        const frameId = Number(rawFrameId);
+        if (Number.isInteger(frameId) && state?.hasMedia) frames.set(frameId, { state });
+      }
+      if (frames.size > 0) frameMediaStates.set(tabId, frames);
+    }
+  })();
+  return await frameStateHydration;
+}
+
+async function persistTabFrameStates(tabId) {
+  const key = frameStateSessionKey(tabId);
+  const frames = frameMediaStates.get(tabId);
+  if (!frames?.size) {
+    await chrome.storage.session.remove(key);
+    return;
+  }
+  await chrome.storage.session.set({
+    [key]: Object.fromEntries([...frames].map(([frameId, entry]) => [frameId, entry.state]))
+  });
+}
+
+function mutateTabFrameStates(tabId, mutator) {
+  const operation = frameStateMutationQueue.then(async () => {
+    await hydrateFrameMediaStates();
+    mutator();
+    await persistTabFrameStates(tabId);
+  });
+  frameStateMutationQueue = operation.catch(() => {});
+  return operation;
+}
 
 function recordFrameMediaState(sender, state) {
   const tabId = sender?.tab?.id;
-  if (typeof tabId !== 'number') return;
+  if (typeof tabId !== 'number') return Promise.resolve();
   const frameId = typeof sender.frameId === 'number' ? sender.frameId : 0;
 
-  let frames = frameMediaStates.get(tabId);
-  if (!frames) {
-    frames = new Map();
-    frameMediaStates.set(tabId, frames);
-  }
+  return mutateTabFrameStates(tabId, () => {
+    let frames = frameMediaStates.get(tabId);
+    if (!frames) {
+      frames = new Map();
+      frameMediaStates.set(tabId, frames);
+    }
 
-  if (state?.hasMedia) frames.set(frameId, { state, updatedAt: Date.now() });
-  else frames.delete(frameId);
+    if (state?.hasMedia) frames.set(frameId, { state });
+    else frames.delete(frameId);
 
-  if (frames.size === 0) frameMediaStates.delete(tabId);
+    if (frames.size === 0) frameMediaStates.delete(tabId);
+  });
 }
 
-function scoreFrame({ state, updatedAt }) {
-  if (Date.now() - updatedAt > FRAME_STATE_TTL) return -1;
+function clearTabFrameMediaStates(tabId) {
+  return mutateTabFrameStates(tabId, () => frameMediaStates.delete(tabId));
+}
+
+function forgetFrameMediaState(tabId, frameId) {
+  return mutateTabFrameStates(tabId, () => {
+    const frames = frameMediaStates.get(tabId);
+    frames?.delete(frameId);
+    if (frames?.size === 0) frameMediaStates.delete(tabId);
+  });
+}
+
+function scoreFrame({ state }) {
   if (!state?.hasMedia) return -1;
   // Playing media outranks paused media, then the largest visible player wins.
   // The top frame breaks exact ties so an ad iframe never wins by default.
@@ -228,6 +304,8 @@ function pickActiveFrame(tabId) {
 }
 
 async function sendToActiveFrame(tabId, message) {
+  await frameStateMutationQueue;
+  await hydrateFrameMediaStates();
   const candidates = rankActiveFrames(tabId);
   for (const frameId of candidates) {
     try {
@@ -236,7 +314,7 @@ async function sendToActiveFrame(tabId, message) {
       // The frame went away between reporting and dispatch. Drop it and retry
       // the next ranked reporter. Never omit frameId: doing so broadcasts the
       // command to every content script in the tab.
-      frameMediaStates.get(tabId)?.delete(frameId);
+      await forgetFrameMediaState(tabId, frameId);
     }
   }
 
@@ -248,10 +326,12 @@ async function sendToActiveFrame(tabId, message) {
   return undefined;
 }
 
-chrome.tabs.onRemoved.addListener(tabId => frameMediaStates.delete(tabId));
+chrome.tabs.onRemoved.addListener(tabId => {
+  clearTabFrameMediaStates(tabId).catch(() => {});
+});
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   // A new navigation invalidates every frame the old document reported.
-  if (changeInfo.status === 'loading') frameMediaStates.delete(tabId);
+  if (changeInfo.status === 'loading') clearTabFrameMediaStates(tabId).catch(() => {});
 });
 
 function normalizeEntryKey(value, label = 'hostname') {
@@ -387,7 +467,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleMessage(message, sender) {
   switch (message.type) {
     case 'reportMediaState': {
-      recordFrameMediaState(sender, message.state);
+      await recordFrameMediaState(sender, message.state);
       return { success: true };
     }
 

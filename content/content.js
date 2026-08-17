@@ -20,6 +20,7 @@
   let controllerPositionFrame = null;
   let controllerPositionListenersBound = false;
   let controllerManualOffset = null;
+  let activeMediaRefreshQueued = false;
   let isBlocked = false;
   let contextInvalidated = false;
   let extensionActive = false;
@@ -114,6 +115,13 @@
   // Active-frame reporting
   const FRAME_REPORT_DELAY_MS = 250;
   let frameReportTimer = null;
+  let frameHasReportedMedia = false;
+
+  // Media can enter the DOM before layout or expand from a thumbnail later.
+  // One shared observer replaces per-element retry timers and wakes only when
+  // geometry actually changes.
+  let deferredMediaResizeObserver = null;
+  const deferredMediaElements = new Set();
 
   // Shadow DOM tracking. Shadow roots are separate trees that the document
   // observer cannot see into, so each one is observed individually. Finding
@@ -157,6 +165,7 @@
     stopTimeTracking();
     stopSilenceMonitor();
     if (domObserver) domObserver.disconnect();
+    clearAllDeferredMedia();
     stopUrlPoll();
 
     // Clear auto-hide timers
@@ -248,8 +257,6 @@
       };
     }
 
-    setupKeyboardListener();
-    setupContextMenu();
     startUrlChangeDetection();
 
     // Site access is already part of the normalized snapshot returned above.
@@ -297,6 +304,7 @@
     }
     observedShadowRoots = new WeakSet();
     cancelShadowScans();
+    clearAllDeferredMedia();
     [...mediaElements.keys()].forEach(media => detachController(media, { preserveAudio: true }));
     destroyControllerPortal();
     stopSilenceMonitor();
@@ -637,6 +645,9 @@
     for (const media of [...mediaElements.keys()]) {
       if (!media.isConnected) detachController(media);
     }
+    for (const media of [...deferredMediaElements]) {
+      if (!media.isConnected) clearDeferredMedia(media);
+    }
   }
 
   // Set up mutation observer for dynamic content
@@ -698,12 +709,68 @@
     return false;
   }
 
+  function mediaDimensions(media) {
+    return {
+      width: media.offsetWidth || media.clientWidth || media.videoWidth || 0,
+      height: media.offsetHeight || media.clientHeight || media.videoHeight || 0
+    };
+  }
+
+  function isMediaLargeEnough(media) {
+    const { width, height } = mediaDimensions(media);
+    return width > 0 && height > 0 && (width >= 100 || height >= 100);
+  }
+
+  function clearDeferredMedia(media) {
+    if (!deferredMediaElements.delete(media)) return;
+    deferredMediaResizeObserver?.unobserve(media);
+    if (media._vscDeferredMetadataListener) {
+      media.removeEventListener('loadedmetadata', media._vscDeferredMetadataListener);
+      delete media._vscDeferredMetadataListener;
+    }
+  }
+
+  function retryDeferredMedia(media) {
+    if (!media.isConnected) {
+      clearDeferredMedia(media);
+      return;
+    }
+    if (!isMediaLargeEnough(media)) return;
+    clearDeferredMedia(media);
+    attachController(media);
+  }
+
+  function deferMediaUntilSized(media) {
+    if (deferredMediaElements.has(media)) return;
+    deferredMediaElements.add(media);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      if (!deferredMediaResizeObserver) {
+        deferredMediaResizeObserver = new ResizeObserver(entries => {
+          for (const entry of entries) retryDeferredMedia(entry.target);
+        });
+      }
+      deferredMediaResizeObserver.observe(media);
+    }
+
+    const onMetadata = () => retryDeferredMedia(media);
+    media._vscDeferredMetadataListener = onMetadata;
+    media.addEventListener('loadedmetadata', onMetadata, { once: true });
+  }
+
+  function clearAllDeferredMedia() {
+    for (const media of [...deferredMediaElements]) clearDeferredMedia(media);
+    deferredMediaResizeObserver?.disconnect();
+    deferredMediaResizeObserver = null;
+  }
+
   // Attach controller to media element
   function attachController(media) {
     if (mediaElements.has(media)) return;
 
     // Skip if media is not connected to the DOM
     if (!media.isConnected) {
+      clearDeferredMedia(media);
       debug('Video Speed Pro: Skipping disconnected media element');
       return;
     }
@@ -711,37 +778,28 @@
     // Skip tiny videos (likely ads or tracking pixels)
     // But only if the video has actually loaded and we know its size
     if (media.tagName === 'VIDEO') {
-      const width = media.offsetWidth || media.clientWidth || media.videoWidth;
-      const height = media.offsetHeight || media.clientHeight || media.videoHeight;
+      const { width, height } = mediaDimensions(media);
       
       // Only skip if video is loaded (has dimensions) AND is tiny
       if (width > 0 && height > 0 && width < 100 && height < 100) {
+        deferMediaUntilSized(media);
         debug('Video Speed Pro: Skipping tiny video', width, 'x', height);
         return;
       }
       
-      // If video has zero dimensions, it might not be loaded yet
-      // Wait for loadedmetadata event to try again
-      if (width === 0 && height === 0 && !media._vscWaitingForLoad) {
-        media._vscWaitingForLoad = true;
-        debug('Video Speed Pro: Video has no dimensions, waiting for load...');
-        media.addEventListener('loadedmetadata', () => {
-          media._vscWaitingForLoad = false;
-          attachController(media);
-        }, { once: true });
-        // Also try after a short delay in case loadedmetadata already fired
-        setTimeout(() => {
-          if (!mediaElements.has(media)) {
-            media._vscWaitingForLoad = false;
-            attachController(media);
-          }
-        }, 500);
+      if (width === 0 && height === 0) {
+        deferMediaUntilSized(media);
+        debug('Video Speed Pro: Video has no dimensions, observing for layout...');
         return;
       }
     }
 
+    clearDeferredMedia(media);
+
     // Track the media before any asynchronous UI work. The frame owns a single
     // fixed controller portal and retargets it as playback focus changes.
+    setupKeyboardListener();
+    setupContextMenu();
     const attachedAt = ++mediaActivitySequence;
     mediaElements.set(media, {
       attachedAt,
@@ -818,7 +876,7 @@
       applyVolumeBoostToMedia(media);
     }
 
-    refreshActiveMedia();
+    scheduleActiveMediaRefresh();
 
     reportMediaState();
     debug('Video Speed Pro: Attached to', media.tagName);
@@ -866,7 +924,7 @@
       stopTimeTracking();
       destroyControllerPortal();
     } else {
-      refreshActiveMedia();
+      scheduleActiveMediaRefresh();
     }
     reportMediaState();
   }
@@ -888,6 +946,20 @@
     if (media) showControllerForMedia(media);
     else destroyControllerPortal();
     return media;
+  }
+
+  // A single mutation can add or remove dozens of players. Refreshing active
+  // media from every attach/detach turns that batch into an O(n²) sequence of
+  // layout reads and repeatedly rebuilds the same shared portal. One microtask
+  // keeps the UI responsive in the same event-loop turn while doing one scan.
+  function scheduleActiveMediaRefresh() {
+    if (activeMediaRefreshQueued) return;
+    activeMediaRefreshQueued = true;
+    queueMicrotask(() => {
+      activeMediaRefreshQueued = false;
+      if (!extensionActive || contextInvalidated) return;
+      refreshActiveMedia();
+    });
   }
 
   async function showControllerForMedia(media) {
@@ -1457,7 +1529,14 @@
     // for the site fighting us.
     setDesiredSpeed(media, speed);
     applyPlaybackRate(media, speed);
-    if (media._vscSilenceActive) silenceAccelerated = false;
+    if (media._vscSilenceActive) {
+      // A direct user choice wins immediately. Clear the temporary silence
+      // state so rate enforcement remains active, and require a fresh complete
+      // quiet window before silence skipping can accelerate again.
+      media._vscSilenceActive = false;
+      silenceAccelerated = false;
+      silenceStartedAt = performance.now();
+    }
 
     updateControllerDisplay(media);
     highlightController(media);
@@ -1474,12 +1553,6 @@
     }
   }
   
-  // Check if current site is YouTube
-  function isYouTube() {
-    return window.location.hostname.includes('youtube.com') || 
-           window.location.hostname.includes('youtu.be');
-  }
-
   // Seek media forward/backward
   function seekMedia(media, seconds) {
     media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + seconds));
@@ -2001,13 +2074,6 @@
     }
   }
 
-  // Load saved filters
-  function loadSavedFilters() {
-    if (contextInvalidated) return;
-    const filters = settings?.rememberFilters ? settings.savedFilters?.[window.location.hostname] : null;
-    if (filters) videoFilters = { ...videoFilters, ...filters };
-  }
-
   // ==========================================
   // VOLUME BOOST
   // ==========================================
@@ -2259,13 +2325,6 @@
         level: volumeBoostLevel
       });
     }
-  }
-
-  // Load saved volume boost
-  function loadSavedVolumeBoost() {
-    if (contextInvalidated) return;
-    const level = settings?.rememberVolumeBoost ? settings.savedVolumeBoost?.[window.location.hostname] : null;
-    if (typeof level === 'number') volumeBoostLevel = Math.max(100, Math.min(VOLUME_BOOST_MAX, level));
   }
 
   // ==========================================
@@ -2525,11 +2584,15 @@
 
   function reportMediaState() {
     if (contextInvalidated || frameReportTimer) return;
+    if (!frameHasReportedMedia && mediaElements.size === 0) return;
     // Coalesce bursts: attaching ten videos should send one report, not ten.
     frameReportTimer = setTimeout(() => {
       frameReportTimer = null;
       if (contextInvalidated) return;
-      sendMessage({ type: 'reportMediaState', state: computeFrameMediaState() });
+      const state = computeFrameMediaState();
+      if (!state.hasMedia && !frameHasReportedMedia) return;
+      frameHasReportedMedia = state.hasMedia;
+      sendMessage({ type: 'reportMediaState', state });
     }, FRAME_REPORT_DELAY_MS);
   }
 
@@ -2945,7 +3008,7 @@
     const seconds = pendingTimeSaved;
     pendingTimeSaved = 0;
     const response = await sendMessage({ type: 'addTimeSaved', seconds });
-    if (response?.success === false && !contextInvalidated) {
+    if (response?.success !== true && !contextInvalidated) {
       pendingTimeSaved += seconds;
       if (!timeSavedFlushTimer) timeSavedFlushTimer = setTimeout(flushTimeSaved, TIME_SAVED_FLUSH_MS);
     }

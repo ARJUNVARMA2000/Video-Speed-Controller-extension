@@ -7,8 +7,7 @@ Install the test runtime once, then run both suites before packaging:
 ```bash
 npm install
 npx playwright install chromium
-npm run check
-npm run test:e2e
+npm run check:full
 ```
 
 `npm run check` validates JavaScript syntax, manifest assets, all locale catalogues, settings
@@ -19,9 +18,9 @@ normalization, Sync quota/chunk migration, serialized writes, and targeted frame
 - no controller/CSS portal on a page without media;
 - one fixed closed-shadow portal for the active media, with no wrappers or media reparenting;
 - dynamic and open-shadow media discovery, deterministic active-player keyboard control, and exact modifier chords;
-- speed reassertion after a simulated site reset;
-- hostile page CSS isolation and one portal across a 42-media stress page;
-- tiny-frame deferral/growth and popup routing to one playing iframe;
+- speed reassertion after a simulated site reset and user override during silence acceleration;
+- hostile page CSS isolation and one portal across a 42-media stress page, with a 100 ms frame budget;
+- timer-free thumbnail-media and tiny-frame deferral/growth, plus popup routing to one playing iframe;
 - custom presets, legacy-shaped import, Sync collection chunking, and round-trip reads;
 - 30-second time-saved batching with immediate partial flush on pause; and
 - controller cleanup after all media and iframe owners are removed.

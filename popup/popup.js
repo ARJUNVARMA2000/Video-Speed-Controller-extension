@@ -37,6 +37,8 @@
   let settings = {};
   let persistedSettings = {};
   let saveQueue = Promise.resolve();
+  let saveDebounceTimer = null;
+  const SAVE_DEBOUNCE_MS = 150;
   let recordingInput = null;
   let currentHostname = null;
   let currentTabId = null;
@@ -558,8 +560,9 @@
       const value = parseFloat(elements.opacity.value);
       elements.opacityValue.textContent = Math.round(value * 100) + '%';
       settings.opacity = value;
-      saveSettings();
+      scheduleSettingsSave();
     });
+    elements.opacity.addEventListener('change', saveSettings);
 
     // Controller mode
     elements.controllerMode.addEventListener('change', () => {
@@ -581,19 +584,22 @@
       const value = parseInt(elements.autoHideDelay.value);
       elements.autoHideDelayValue.textContent = value === 0 ? t('ui_off', 'Off') : value + 's';
       settings.autoHideDelay = value;
-      saveSettings();
+      scheduleSettingsSave();
     });
+    elements.autoHideDelay.addEventListener('change', saveSettings);
 
     // Color pickers
     elements.colorBackground.addEventListener('input', () => {
       settings.colorBackground = elements.colorBackground.value;
-      saveSettings();
+      scheduleSettingsSave();
     });
+    elements.colorBackground.addEventListener('change', saveSettings);
 
     elements.colorAccent.addEventListener('input', () => {
       settings.colorAccent = elements.colorAccent.value;
-      saveSettings();
+      scheduleSettingsSave();
     });
+    elements.colorAccent.addEventListener('change', saveSettings);
 
     // Speed presets bar click
     elements.speedPresetsBar.addEventListener('click', async (e) => {
@@ -1102,7 +1108,17 @@
   }
 
   // Save settings to storage
+  function scheduleSettingsSave() {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => {
+      saveDebounceTimer = null;
+      saveSettings();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
   function saveSettings() {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
     const operation = saveQueue.then(async () => {
       const requestSnapshot = VSCSettings.normalizeSettings(settings);
       const updates = VSCSettings.diffSettings(persistedSettings, requestSnapshot);

@@ -20,7 +20,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Video Speed Pro"
+    "default_title": "__MSG_actionTitle__"
   },
   "options_ui": {
     "page": "popup/popup.html",
@@ -56,25 +56,25 @@
       "suggested_key": {
         "default": "Alt+V"
       },
-      "description": "Show/Hide speed controller"
+      "description": "__MSG_commandToggleController__"
     },
     "increase-speed": {
       "suggested_key": {
         "default": "Alt+D"
       },
-      "description": "Increase playback speed"
+      "description": "__MSG_commandIncreaseSpeed__"
     },
     "decrease-speed": {
       "suggested_key": {
         "default": "Alt+S"
       },
-      "description": "Decrease playback speed"
+      "description": "__MSG_commandDecreaseSpeed__"
     },
     "reset-speed": {
       "suggested_key": {
         "default": "Alt+R"
       },
-      "description": "Reset to normal speed"
+      "description": "__MSG_commandResetSpeed__"
     }
   }
 }

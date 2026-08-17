@@ -149,6 +149,73 @@ async function run() {
     await page.keyboard.press('Control+Shift+K');
     await page.waitForFunction(() => Math.abs(document.querySelector('#dynamic-video').playbackRate - 1.25) < 0.001);
 
+    // Silence acceleration must yield cleanly to an explicit user speed. The
+    // fixture intentionally has no audio track, so it is deterministic silence
+    // without microphone, network, or codec timing dependencies.
+    const silenceUpdate = await extensionPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings',
+      updates: {
+        silenceSkipEnabled: true,
+        silenceThreshold: 0.2,
+        silenceMinDuration: 1,
+        silenceSkipSpeed: 4
+      }
+    }));
+    assert.equal(silenceUpdate.success, true);
+    await page.waitForFunction(() => Math.abs(document.querySelector('#dynamic-video').playbackRate - 4) < 0.001, null, {
+      timeout: 3000
+    });
+    const manualSpeed = await extensionPage.evaluate(tab => chrome.runtime.sendMessage({
+      type: 'sendToActiveFrame', tabId: tab, message: { type: 'setSpeed', speed: 1.5 }
+    }), tabId);
+    assert.equal(manualSpeed.success, true);
+    await page.locator('#dynamic-video').evaluate(video => { video.playbackRate = 1; });
+    await page.waitForFunction(() => Math.abs(document.querySelector('#dynamic-video').playbackRate - 1.5) < 0.001, null, {
+      timeout: 500
+    });
+    await page.waitForTimeout(250);
+    assert.ok(Math.abs(await page.locator('#dynamic-video').evaluate(video => video.playbackRate) - 1.5) < 0.001,
+      'silence skipping overrode an explicit user speed before a fresh quiet window elapsed');
+    await extensionPage.evaluate(() => chrome.runtime.sendMessage({
+      type: 'updateSettings', updates: { silenceSkipEnabled: false }
+    }));
+
+    // Thumbnail-sized media is deferred without polling, then becomes
+    // controllable as soon as the same element expands into a real player.
+    await page.locator('video').evaluateAll(videos => videos.forEach(video => video.pause()));
+    await page.evaluate(() => {
+      const video = document.createElement('video');
+      video.id = 'deferred-video';
+      video.src = 'sample.webm';
+      video.muted = true;
+      video.loop = true;
+      video.playbackRate = 0.8;
+      video.style.width = '50px';
+      video.style.height = '50px';
+      document.body.append(video);
+    });
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('#deferred-video').evaluate(video => video.playbackRate), 0.8);
+    await page.locator('#deferred-video').evaluate(video => {
+      video.style.width = '640px';
+      video.style.height = '360px';
+      return video.play();
+    });
+    let deferredAttached = false;
+    for (let attempt = 0; attempt < 20 && !deferredAttached; attempt += 1) {
+      await page.waitForTimeout(100);
+      await extensionPage.evaluate(tab => chrome.runtime.sendMessage({
+        type: 'sendToActiveFrame', tabId: tab, message: { type: 'setSpeed', speed: 1 }
+      }), tabId);
+      deferredAttached = Math.abs(await page.locator('#deferred-video').evaluate(video => video.playbackRate) - 1) < 0.001;
+    }
+    assert.equal(deferredAttached, true, 'expanded thumbnail media was never attached and elected');
+    await page.keyboard.press('Control+Shift+K');
+    await page.waitForFunction(() => Math.abs(document.querySelector('#deferred-video').playbackRate - 1.25) < 0.001, null, {
+      timeout: 1000
+    });
+    await page.locator('#deferred-video').evaluate(video => video.remove());
+
     // Media in an open shadow root is discovered and controls the same portal.
     await page.locator('video').evaluateAll(videos => videos.forEach(video => video.pause()));
     await page.locator('#add-shadow-host').click();
@@ -184,7 +251,7 @@ async function run() {
     assert.equal(await page.locator('video').count(), 42);
     assert.equal(await page.locator('.vsc-host-controller').count(), 1);
     assert.equal(await page.locator('.vsc-wrapper').count(), 0);
-    assert.ok(frameDelayMs < 1000, `40-video insertion blocked a frame for ${frameDelayMs.toFixed(1)}ms`);
+    assert.ok(frameDelayMs < 100, `40-video insertion blocked a frame for ${frameDelayMs.toFixed(1)}ms`);
 
     // Frame lifecycle: tiny players defer initialization until they become
     // large enough; a real playing iframe wins background relay arbitration.

@@ -1,4 +1,19 @@
 {
+  "actionTitle": {
+    "message": "Video Speed Pro"
+  },
+  "commandToggleController": {
+    "message": "速度コントローラーの表示を切り替える"
+  },
+  "commandIncreaseSpeed": {
+    "message": "再生速度を上げる"
+  },
+  "commandDecreaseSpeed": {
+    "message": "再生速度を下げる"
+  },
+  "commandResetSpeed": {
+    "message": "標準速度に戻す"
+  },
   "a11y_add_allowed_site": {
     "message": "許可されたサイトを追加"
   },

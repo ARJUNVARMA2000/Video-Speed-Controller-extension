@@ -95,11 +95,13 @@ npm install
 npx playwright install chromium
 npm test
 npm run check
+npm run check:full
 npm run test:e2e
 npm run test:manual
 ```
 
 Set `VSC_REAL_SITE_SMOKE=1` when running `npm run test:e2e` to include the opt-in YouTube smoke check.
+`npm run check:full` runs the fast checks and the local unpacked-extension browser suite.
 
 The manual test lab is served at `http://127.0.0.1:4173/media.html`. See [`docs/TESTING.md`](docs/TESTING.md) for the Chrome smoke-test checklist.
 

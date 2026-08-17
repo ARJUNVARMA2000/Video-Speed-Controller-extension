@@ -1,4 +1,19 @@
 {
+  "actionTitle": {
+    "message": "Video Speed Pro"
+  },
+  "commandToggleController": {
+    "message": "Geschwindigkeitsregler ein- oder ausblenden"
+  },
+  "commandIncreaseSpeed": {
+    "message": "Wiedergabegeschwindigkeit erhöhen"
+  },
+  "commandDecreaseSpeed": {
+    "message": "Wiedergabegeschwindigkeit verringern"
+  },
+  "commandResetSpeed": {
+    "message": "Auf normale Geschwindigkeit zurücksetzen"
+  },
   "a11y_add_allowed_site": {
     "message": "Erlaubte Site hinzufügen"
   },

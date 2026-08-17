@@ -13,8 +13,10 @@ function clone(value) {
 
 function createStorageArea(initial = {}) {
   const data = clone(initial);
+  const setCalls = [];
   return {
     data,
+    setCalls,
     async get(keys) {
       if (keys == null) return clone(data);
       if (typeof keys === 'string') return { [keys]: clone(data[keys]) };
@@ -27,6 +29,7 @@ function createStorageArea(initial = {}) {
       ]));
     },
     async set(updates) {
+      setCalls.push(clone(updates));
       Object.assign(data, clone(updates));
     },
     async remove(keys) {
@@ -38,7 +41,7 @@ function createStorageArea(initial = {}) {
   };
 }
 
-function createHarness(syncInitial = {}, localInitial = {}) {
+function createHarness(syncInitial = {}, localInitial = {}, sessionInitial = {}) {
   let messageListener;
   let installedListener;
   let commandListener;
@@ -46,12 +49,17 @@ function createHarness(syncInitial = {}, localInitial = {}) {
   let tabUpdatedListener;
   const sync = createStorageArea(syncInitial);
   const local = createStorageArea(localInitial);
+  const session = createStorageArea(sessionInitial);
   const sentMessages = [];
   // Tests set this to control which frames answer and with what.
   let frameResponder = () => undefined;
   let activeTabs = [];
+  let now = 1_000_000;
+  class HarnessDate extends Date {
+    static now() { return now; }
+  }
   const chrome = {
-    storage: { sync, local },
+    storage: { sync, local, session },
     runtime: {
       onInstalled: { addListener(listener) { installedListener = listener; } },
       onMessage: { addListener(listener) { messageListener = listener; } }
@@ -72,7 +80,7 @@ function createHarness(syncInitial = {}, localInitial = {}) {
     chrome,
     clearTimeout,
     console: { error() {}, log() {}, warn() {} },
-    Date,
+    Date: HarnessDate,
     importScripts() {},
     Map,
     Promise,
@@ -84,6 +92,7 @@ function createHarness(syncInitial = {}, localInitial = {}) {
 
   return {
     local,
+    session,
     sync,
     sentMessages,
     install(details) {
@@ -96,6 +105,7 @@ function createHarness(syncInitial = {}, localInitial = {}) {
       });
     },
     setActiveTabs(tabs) { activeTabs = tabs; },
+    advanceTime(milliseconds) { now += milliseconds; },
     setFrameResponder(responder) { frameResponder = responder; },
     runCommand(command) { return commandListener(command); },
     removeTab(tabId) { return tabRemovedListener(tabId); },
@@ -134,6 +144,7 @@ test('targeted settings updates preserve independently changing collections', as
   assert.deepEqual(persisted.savedSpeeds, { 'example.com': 2 });
   assert.equal(harness.sync.data.unknown, undefined);
   assert.equal(typeof harness.sync.data.lastSyncTime, 'number');
+  assert.deepEqual(Object.keys(harness.sync.setCalls.at(-1)).sort(), ['enabled', 'lastSyncTime']);
 });
 
 test('import normalizes unsafe values and keeps time saved in local storage', async () => {
@@ -229,6 +240,30 @@ test('largest player wins when no frame is playing, with the top frame breaking 
   await harness.report(1, 2, { hasMedia: true, playing: false, area: 300 * 250, isTop: false });
   await harness.runCommand('reset-speed');
   assert.equal(harness.sentMessages.at(-1).frameId, 0);
+});
+
+test('paused embedded players remain routable until an explicit lifecycle update', async () => {
+  const harness = createHarness();
+  harness.setActiveTabs([{ id: 12 }]);
+  harness.setFrameResponder(() => ({ ok: true }));
+
+  await harness.report(12, 4, { hasMedia: true, playing: false, area: 1280 * 720, isTop: false });
+  harness.advanceTime(60 * 60 * 1000);
+  await harness.runCommand('increase-speed');
+
+  assert.equal(harness.sentMessages.at(-1).frameId, 4);
+});
+
+test('embedded-player routing survives a service-worker restart', async () => {
+  const firstWorker = createHarness();
+  await firstWorker.report(13, 7, { hasMedia: true, playing: true, area: 640 * 360, isTop: false });
+
+  const restartedWorker = createHarness({}, {}, firstWorker.session.data);
+  restartedWorker.setActiveTabs([{ id: 13 }]);
+  restartedWorker.setFrameResponder(() => ({ ok: true }));
+  await restartedWorker.runCommand('increase-speed');
+
+  assert.equal(restartedWorker.sentMessages.at(-1).frameId, 7);
 });
 
 test('frames that lose their media stop receiving commands', async () => {

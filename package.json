@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "check": "npm run check:syntax && npm test",
+    "check:full": "npm run check && npm run test:e2e",
     "check:syntax": "node --check background/service-worker.js && node --check content/content.js && node --check popup/popup.js && node --check popup/compact.js && node --check shared/settings.js && node scripts/validate-manifest.js",
-    "package": "npm run check && node scripts/package-extension.js",
+    "package": "npm run check:full && node scripts/package-extension.js",
     "test:e2e": "node scripts/test-extension-e2e.js",
     "test:manual": "node scripts/serve-test-page.js",
     "test": "node --test test/*.test.js"
