@@ -9,7 +9,8 @@ const {
   matchPattern,
   normalizeSettings,
   normalizeSpeed,
-  sanitizeSettingsPatch
+  sanitizeSettingsPatch,
+  VOLUME_BOOST_MAX
 } = require('../shared/settings.js');
 
 test('normalizeSpeed clamps and rounds playback rates', () => {
@@ -34,7 +35,9 @@ test('normalizeSettings supplies defaults and rejects malformed values', () => {
   assert.equal(settings.controllerMode, 'minimal');
   assert.equal(settings.colorAccent, '#e94560');
   assert.deepEqual(settings.savedSpeeds, { 'example.com': 16 });
-  assert.deepEqual(settings.savedVolumeBoost, { 'example.com': 400 });
+  // Pinned to the exported ceiling rather than a literal, so raising the cap
+  // does not silently need the test edited to match.
+  assert.deepEqual(settings.savedVolumeBoost, { 'example.com': VOLUME_BOOST_MAX });
   assert.equal(settings.shortcuts.length, 13);
 });
 

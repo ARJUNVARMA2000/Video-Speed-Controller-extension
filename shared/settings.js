@@ -12,6 +12,7 @@
   const SPEED_MIN = 0.1;
   const SPEED_MAX = 16;
   const MAX_LIST_ITEMS = 100;
+  const VOLUME_BOOST_MAX = 600;
   const MAX_PATTERN_LENGTH = 512;
   const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -181,7 +182,7 @@
     for (const [hostname, level] of Object.entries(value).slice(-MAX_LIST_ITEMS)) {
       const safeHostname = sanitizePattern(hostname);
       if (!safeHostname || !Number.isFinite(Number(level))) continue;
-      result[safeHostname] = Math.round(clampNumber(level, 100, 400, 100));
+      result[safeHostname] = Math.round(clampNumber(level, 100, VOLUME_BOOST_MAX, 100));
     }
     return result;
   }
@@ -351,6 +352,7 @@
     DEFAULT_SETTINGS: createDefaultSettings(),
     SPEED_MIN,
     SPEED_MAX,
+    VOLUME_BOOST_MAX,
     checkSiteAccess,
     createDefaultSettings,
     diffSettings,

@@ -18,6 +18,76 @@ let collectionWriteQueue = Promise.resolve();
 let timeSavedWriteQueue = Promise.resolve();
 let timeSavedCache = null;
 
+// Per-tab media frame registry. Content scripts run in every frame, so commands
+// have to be routed to one elected frame instead of broadcast to all of them.
+const FRAME_STATE_TTL = 5 * 60 * 1000;
+const ACTIVE_FRAME_RELAY_TYPES = new Set(['getActiveState', 'setSpeed']);
+const frameMediaStates = new Map(); // Map<tabId, Map<frameId, { state, updatedAt }>>
+
+function recordFrameMediaState(sender, state) {
+  const tabId = sender?.tab?.id;
+  if (typeof tabId !== 'number') return;
+  const frameId = typeof sender.frameId === 'number' ? sender.frameId : 0;
+
+  let frames = frameMediaStates.get(tabId);
+  if (!frames) {
+    frames = new Map();
+    frameMediaStates.set(tabId, frames);
+  }
+
+  if (state?.hasMedia) frames.set(frameId, { state, updatedAt: Date.now() });
+  else frames.delete(frameId);
+
+  if (frames.size === 0) frameMediaStates.delete(tabId);
+}
+
+function scoreFrame({ state, updatedAt }) {
+  if (Date.now() - updatedAt > FRAME_STATE_TTL) return -1;
+  if (!state?.hasMedia) return -1;
+  // Playing media outranks paused media, then the largest visible player wins.
+  // The top frame breaks exact ties so an ad iframe never wins by default.
+  let score = Math.max(0, Number(state.area) || 0);
+  if (state.playing) score += 1e12;
+  if (state.isTop) score += 1;
+  return score;
+}
+
+function pickActiveFrame(tabId) {
+  const frames = frameMediaStates.get(tabId);
+  if (!frames) return null;
+
+  let bestFrameId = null;
+  let bestScore = -1;
+  for (const [frameId, entry] of frames) {
+    const score = scoreFrame(entry);
+    if (score > bestScore) {
+      bestScore = score;
+      bestFrameId = frameId;
+    }
+  }
+  return bestFrameId;
+}
+
+async function sendToActiveFrame(tabId, message) {
+  const frameId = pickActiveFrame(tabId);
+  if (frameId !== null) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, message, { frameId });
+    } catch {
+      // The frame went away between reporting and dispatch. Drop it and fall
+      // back to a tab-wide send so the command still lands.
+      frameMediaStates.get(tabId)?.delete(frameId);
+    }
+  }
+  return await chrome.tabs.sendMessage(tabId, message).catch(() => undefined);
+}
+
+chrome.tabs.onRemoved.addListener(tabId => frameMediaStates.delete(tabId));
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  // A new navigation invalidates every frame the old document reported.
+  if (changeInfo.status === 'loading') frameMediaStates.delete(tabId);
+});
+
 function normalizeEntryKey(value, label = 'hostname') {
   if (typeof value !== 'string') throw new Error(`Invalid ${label}`);
   const key = value.trim().slice(0, 512);
@@ -130,7 +200,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.commands.onCommand.addListener(async (command) => {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
-    await chrome.tabs.sendMessage(tabs[0].id, { type: 'command', command }).catch(() => {});
+    await sendToActiveFrame(tabs[0].id, { type: 'command', command });
   }
 });
 
@@ -147,6 +217,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   switch (message.type) {
+    case 'reportMediaState': {
+      recordFrameMediaState(sender, message.state);
+      return { success: true };
+    }
+
+    case 'sendToActiveFrame': {
+      const tabId = Number(message.tabId);
+      if (!Number.isInteger(tabId)) throw new Error('Invalid tab id');
+      const relayed = message.message;
+      if (!ACTIVE_FRAME_RELAY_TYPES.has(relayed?.type)) throw new Error('Unsupported relay message');
+      const response = await sendToActiveFrame(tabId, relayed);
+      if (response === undefined) return { success: false, error: 'No content script responded' };
+      return { success: true, response };
+    }
+
     case 'getSettings': {
       const [syncSettings, localSettings] = await Promise.all([
         chrome.storage.sync.get(null),

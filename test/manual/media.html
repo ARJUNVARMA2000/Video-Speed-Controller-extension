@@ -29,6 +29,16 @@
     <button id="remove-video">Remove dynamic video</button>
     <button id="check">Check controllers</button>
   </div>
+  <div class="actions">
+    <button id="add-shadow-host">Add shadow host with video</button>
+    <button id="fill-shadow">Add video into existing shadow</button>
+    <button id="add-nested-shadow">Add nested shadow video</button>
+    <button id="add-closed-shadow">Add closed shadow video</button>
+    <button id="remove-shadow">Remove shadow videos</button>
+    <button id="hostile-css">Toggle hostile page CSS</button>
+    <button id="add-frames">Add iframes (tiny + real)</button>
+    <button id="grow-frame">Grow the tiny frame</button>
+  </div>
   <p id="status" role="status" aria-live="polite"></p>
 
   <main class="media-grid" id="media-grid">
@@ -36,6 +46,28 @@
       <h2>Initial HTML5 video</h2>
       <video id="primary-video" src="sample.webm" controls muted loop playsinline></video>
       <p>Expected: one overlay, working presets, keyboard shortcuts, screenshot, filters, and A–B loop.</p>
+    </section>
+
+    <section class="media-card">
+      <h2>Shadow DOM</h2>
+      <p>
+        The four shadow buttons cover the cases a document-level observer cannot see.
+        <code>#empty-shadow-host</code> below already has an open shadow root attached at load
+        with no video in it, which is how lazy-loading player shells behave.
+      </p>
+      <div id="empty-shadow-host"></div>
+      <div id="shadow-slot"></div>
+      <p>
+        Expected: <em>Add shadow host</em>, <em>Add video into existing shadow</em>, and
+        <em>Add nested shadow video</em> each get a working controller — speed changes and
+        keyboard shortcuts must affect the video. <em>Add closed shadow video</em> is expected
+        to get no controller: closed roots are unreachable from an extension.
+      </p>
+      <p>
+        Known cosmetic gap: a controller placed inside the page's shadow root renders unstyled,
+        because <code>content/controller.css</code> is injected into the document and document
+        styles do not cross a shadow boundary. Controls still work. Fixed by plan item 4.
+      </p>
     </section>
   </main>
 
@@ -61,10 +93,137 @@
       document.getElementById('dynamic-card')?.remove();
     });
 
+    // Shadow DOM fixtures. Each button covers a case a document-level
+    // MutationObserver cannot see, because selectors never cross a shadow boundary.
+    const emptyShadow = document.getElementById('empty-shadow-host').attachShadow({ mode: 'open' });
+    emptyShadow.innerHTML = '<p style="color:#aeb7c8">Open shadow root, attached at load, still empty.</p>';
+
+    function shadowVideo() {
+      const video = document.createElement('video');
+      video.src = 'sample.webm';
+      video.controls = true;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.style.cssText = 'display:block;width:100%;aspect-ratio:16/9;background:#05060a;border-radius:8px';
+      return video;
+    }
+
+    function shadowSlotCard(id) {
+      const host = document.createElement('div');
+      host.dataset.shadowCase = id;
+      document.getElementById('shadow-slot').append(host);
+      return host;
+    }
+
+    // Case A: host enters the DOM with a video already inside its shadow root.
+    document.getElementById('add-shadow-host').addEventListener('click', () => {
+      const host = document.createElement('div');
+      host.dataset.shadowCase = 'host';
+      host.attachShadow({ mode: 'open' }).append(shadowVideo());
+      document.getElementById('shadow-slot').append(host);
+    });
+
+    // Case B: a shadow root that already existed gets a video later.
+    document.getElementById('fill-shadow').addEventListener('click', () => {
+      if (emptyShadow.querySelector('video')) return;
+      emptyShadow.append(shadowVideo());
+    });
+
+    // Case C: shadow root inside a shadow root.
+    document.getElementById('add-nested-shadow').addEventListener('click', () => {
+      const outer = shadowSlotCard('nested').attachShadow({ mode: 'open' });
+      const inner = document.createElement('div');
+      outer.append(inner);
+      inner.attachShadow({ mode: 'open' }).append(shadowVideo());
+    });
+
+    // Case D: closed root. Expected to stay uncontrolled — not a bug.
+    document.getElementById('add-closed-shadow').addEventListener('click', () => {
+      shadowSlotCard('closed').attachShadow({ mode: 'closed' }).append(shadowVideo());
+    });
+
+    document.getElementById('remove-shadow').addEventListener('click', () => {
+      document.getElementById('shadow-slot').replaceChildren();
+      emptyShadow.querySelector('video')?.remove();
+    });
+
+    // Page CSS of the kind that mangles overlays rendered into the page DOM.
+    // Every declaration is !important, which outranks a plain inline style, so
+    // the extension's shadow hosts must pin their layout with inline !important.
+    let hostileStyle = null;
+    document.getElementById('hostile-css').addEventListener('click', () => {
+      if (hostileStyle) {
+        hostileStyle.remove();
+        hostileStyle = null;
+        document.getElementById('status').textContent = 'Hostile CSS off.';
+        return;
+      }
+      hostileStyle = document.createElement('style');
+      hostileStyle.textContent = `
+        div { position: static !important; font-size: 60px !important; color: lime !important; }
+        .vsc-controller, .vsc-pip-indicator, .vsc-context-menu { display: none !important; }
+        * { z-index: 0 !important; inset: auto !important; }
+      `;
+      document.head.append(hostileStyle);
+      document.getElementById('status').textContent =
+        'Hostile CSS on — overlays must stay visible, correctly placed, and normally sized.';
+    });
+
+    // Frames. The content script skips subframes it measures as smaller than
+    // 150px in either direction, and initialises them if they later grow.
+    document.getElementById('add-frames').addEventListener('click', () => {
+      if (document.getElementById('frame-slot')) return;
+      const slot = document.createElement('section');
+      slot.className = 'media-card';
+      slot.id = 'frame-slot';
+      slot.innerHTML = '<h2>Frames</h2><p>Tiny frame (120x120, should be skipped), ' +
+        'then a real player frame (640x360, should be controlled).</p>';
+      document.getElementById('media-grid').append(slot);
+
+      const doc = '<!doctype html><html><body style="margin:0;background:#05060a">' +
+        '<video src="http://127.0.0.1:4173/sample.webm" muted loop playsinline autoplay ' +
+        'style="width:100%;height:100%"></video></body></html>';
+
+      const tiny = document.createElement('iframe');
+      tiny.id = 'tiny-frame';
+      tiny.style.cssText = 'width:120px;height:120px;border:0;display:block;margin-bottom:12px';
+      tiny.srcdoc = doc;
+
+      const real = document.createElement('iframe');
+      real.style.cssText = 'width:640px;height:360px;border:0;display:block;max-width:100%';
+      real.srcdoc = doc;
+
+      slot.append(tiny, real);
+    });
+
+    document.getElementById('grow-frame').addEventListener('click', () => {
+      const tiny = document.getElementById('tiny-frame');
+      if (!tiny) return;
+      tiny.style.width = '640px';
+      tiny.style.height = '360px';
+      document.getElementById('status').textContent =
+        'Tiny frame grown — it should now pick up a controller without a reload.';
+    });
+
+    // Count across open shadow roots; document.querySelectorAll stops at the boundary.
+    function collect(root, selector, found = []) {
+      root.querySelectorAll(selector).forEach(el => found.push(el));
+      root.querySelectorAll('*').forEach(el => {
+        if (el.shadowRoot) collect(el.shadowRoot, selector, found);
+      });
+      return found;
+    }
+
     document.getElementById('check').addEventListener('click', () => {
-      const videos = document.querySelectorAll('video').length;
-      const controllers = document.querySelectorAll('.vsc-controller').length;
-      document.getElementById('status').textContent = `${controllers} controller(s) for ${videos} video(s) — ${controllers === videos ? 'pass' : 'check extension access or reload'}`;
+      const videos = collect(document, 'video').length;
+      // Controllers live inside closed shadow roots, so they are not reachable
+      // from this page. Count their hosts, which stay in the page DOM.
+      const controllers = collect(document, '.vsc-host-controller').length;
+      const closed = document.querySelectorAll('[data-shadow-case="closed"]').length;
+      const note = closed ? ` (${closed} closed-root video(s) excluded — expected)` : '';
+      document.getElementById('status').textContent =
+        `${controllers} controller(s) for ${videos} video(s)${note} — ${controllers === videos ? 'pass' : 'check extension access or reload'}`;
     });
   </script>
 </body>

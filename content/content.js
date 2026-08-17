@@ -16,8 +16,16 @@
   let extensionActive = false;
   let domObserver = null;
   let interactionListenersBound = false;
+  let contextMenuBound = false;
+  let messageListenerBound = false;
+  let frameGrowthWatched = false;
+  const MIN_FRAME_DIMENSION = 150;
   let urlTrackingStarted = false;
   let urlCheckInterval = null;
+  let urlPollBound = false;
+  let urlPollIntervalMs = null;
+  const URL_POLL_VISIBLE_MS = 1000;
+  const URL_POLL_HIDDEN_MS = 5000;
 
   const DEBUG = false;
   function debug(...args) {
@@ -59,11 +67,47 @@
 
   // Volume Boost state
   let audioContextMap = new Map(); // Map<media, { audioContext, gainNode, sourceNode }>
-  let volumeBoostLevel = 100; // 100 = normal, up to 400
+  let volumeBoostLevel = 100; // 100 = normal, up to VOLUME_BOOST_MAX
+  const VOLUME_BOOST_MAX = 600;
 
   // Drag state (shared global handlers)
   let dragState = null;
   let dragListenersBound = false;
+
+  // Speed enforcement. Sites like YouTube and Netflix reset playbackRate on their
+  // own (new video, quality switch, ad break), so the rate we set has to be
+  // defended after the fact rather than written once.
+  const SPEED_EPSILON = 0.001;
+  const SPEED_REASSERT_WINDOW_MS = 1500;
+  const SPEED_CORRECTION_WINDOW_MS = 1000;
+  const SPEED_CORRECTION_LIMIT = 8;
+  const SPEED_CORRECTION_COOLDOWN_MS = 5000;
+
+  // Active-frame reporting
+  const FRAME_REPORT_DELAY_MS = 250;
+  let frameReportTimer = null;
+
+  // Shadow DOM tracking. Shadow roots are separate trees that the document
+  // observer cannot see into, so each one is observed individually. Finding
+  // them means visiting every element, so the search is budgeted across idle
+  // slices rather than blocking on a whole document at once.
+  const SHADOW_SCAN_BATCH = 250;
+  const IDLE_TIMEOUT_MS = 500;
+  const IDLE_BUDGET_MS = 8;
+  const IDLE_FALLBACK_DELAY_MS = 100;
+  let observedShadowRoots = new WeakSet();
+  let shadowWalkQueue = [];
+  let shadowWalker = null;
+  let shadowScanHandle = null;
+
+
+  // Overlay styles, parsed once and shared by every shadow root in this frame.
+  let controllerStyleSheet = null;
+  let controllerStyleHref = null;
+
+  // The context menu lives in a shadow root, so it cannot be found by querying
+  // the document.
+  let contextMenu = null;
 
   // Check if extension context is still valid
   function isContextValid() {
@@ -84,7 +128,7 @@
 
     stopTimeTracking();
     if (domObserver) domObserver.disconnect();
-    if (urlCheckInterval) clearInterval(urlCheckInterval);
+    stopUrlPoll();
 
     // Clear auto-hide timers
     autoHideTimers.forEach(timer => clearTimeout(timer));
@@ -106,6 +150,34 @@
   }
 
   // Initialize
+  // Ad and tracking iframes make up most of the frames on a busy page and never
+  // hold media worth controlling. Skipping them avoids two message round-trips,
+  // a stylesheet fetch, and an observer per frame. Zero dimensions mean "not
+  // laid out yet" rather than "small", so only frames actually measured as small
+  // are skipped -- the same distinction attachController draws for tiny videos.
+  function isNegligibleFrame() {
+    if (window === window.top) return false;
+    const { innerWidth: width, innerHeight: height } = window;
+    if (!width || !height) return false;
+    return width < MIN_FRAME_DIMENSION || height < MIN_FRAME_DIMENSION;
+  }
+
+  // A skipped frame can still be resized into a real player (expanding embeds,
+  // lightboxes), so watch for that instead of opting out permanently.
+  function waitForFrameToGrow() {
+    if (frameGrowthWatched) return;
+    frameGrowthWatched = true;
+
+    const onResize = () => {
+      if (isNegligibleFrame()) return;
+      window.removeEventListener('resize', onResize);
+      frameGrowthWatched = false;
+      debug('Video Speed Pro: Frame grew, initializing');
+      init();
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+  }
+
   async function init() {
     debug('Video Speed Pro: Starting initialization...');
 
@@ -115,8 +187,17 @@
       return;
     }
 
+    if (isNegligibleFrame()) {
+      debug('Video Speed Pro: Skipping negligible frame', window.innerWidth, 'x', window.innerHeight);
+      waitForFrameToGrow();
+      return;
+    }
+
     try {
-      chrome.runtime.onMessage.addListener(handleMessage);
+      if (!messageListenerBound) {
+        chrome.runtime.onMessage.addListener(handleMessage);
+        messageListenerBound = true;
+      }
     } catch (e) {
       if (e.message?.includes('Extension context invalidated')) handleContextInvalidated();
       return;
@@ -171,11 +252,19 @@
     // Load saved volume boost
     await loadSavedVolumeBoost();
 
+    // Styles first: overlays adopt the sheet at creation time, so having it
+    // ready before any controller exists avoids a flash of unstyled overlay.
+    await loadControllerStyles();
+
+    // Observer next: it has to exist before the scan so shadow roots found
+    // during the scan can be registered against it, and so media added while
+    // the scan runs is not missed.
+    setupObserver();
+
     // Find existing media elements
     findMediaElements();
 
-    // Set up mutation observer for dynamic content
-    setupObserver();
+    reportMediaState();
   }
 
   function deactivateExtension() {
@@ -186,10 +275,13 @@
       domObserver.disconnect();
       domObserver = null;
     }
+    observedShadowRoots = new WeakSet();
+    cancelShadowScans();
     [...mediaElements.keys()].forEach(detachController);
     stopTimeTracking();
     removePipIndicator();
-    document.querySelector('.vsc-context-menu')?.remove();
+    closeContextMenu();
+    reportMediaState();
   }
 
   // Send message to background script
@@ -308,78 +400,153 @@
 
   // Find all media elements on page (including shadow DOM)
   function findMediaElements() {
-    const selector = settings.workOnAudio ? 'video, audio' : 'video';
-    
-    // Find in main document
-    const elements = document.querySelectorAll(selector);
-    debug(`Video Speed Pro: Found ${elements.length} media element(s) in main document`);
-    elements.forEach(el => attachController(el));
-    
-    // Also search in shadow DOMs
-    findMediaInShadowRoots(document.body);
+    // Media is found immediately; hunting for shadow hosts is deferred, because
+    // it is the part that scales with total page size rather than media count.
+    scanMedia(document);
+    queueShadowWalk(document);
   }
 
-  // Recursively search for media in shadow DOMs
-  function findMediaInShadowRoots(root) {
+  // Attach to media directly inside a tree. Cheap: one selector query, no
+  // element-by-element walk, so this is safe to run on every mutation.
+  function scanMedia(root) {
     if (!root) return;
-    
     const selector = settings.workOnAudio ? 'video, audio' : 'video';
-    
-    // Check all elements for shadow roots
-    const allElements = root.querySelectorAll('*');
-    allElements.forEach(el => {
-      if (el.shadowRoot) {
-        const shadowMedia = el.shadowRoot.querySelectorAll(selector);
-        if (shadowMedia.length > 0) {
-          debug(`Video Speed Pro: Found ${shadowMedia.length} media element(s) in shadow DOM`);
-          shadowMedia.forEach(media => attachController(media));
-        }
-        // Recursively search nested shadow DOMs
-        findMediaInShadowRoots(el.shadowRoot);
+
+    if (root.nodeType === Node.ELEMENT_NODE && isMediaElement(root)) attachController(root);
+
+    const media = root.querySelectorAll?.(selector);
+    if (media?.length) {
+      debug(`Video Speed Pro: Found ${media.length} media element(s)`);
+      media.forEach(el => attachController(el));
+    }
+  }
+
+  // Watch a shadow root. Each shadow root is its own tree, so an observer on
+  // document.body never sees inside one; every root needs its own observe()
+  // call. MutationObserver supports many targets per instance, and disconnect()
+  // clears them all together.
+  function registerShadowRoot(root) {
+    if (!root || observedShadowRoots.has(root)) return false;
+    observedShadowRoots.add(root);
+    domObserver?.observe(root, { childList: true, subtree: true });
+    debug('Video Speed Pro: Observing shadow root');
+    return true;
+  }
+
+  function scheduleIdle(callback) {
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(callback, { timeout: IDLE_TIMEOUT_MS });
+      return { cancel: () => cancelIdleCallback(id) };
+    }
+    // Hand the fallback the same deadline shape so callers need only one path.
+    const id = setTimeout(() => {
+      const started = Date.now();
+      callback({ timeRemaining: () => Math.max(0, IDLE_BUDGET_MS - (Date.now() - started)) });
+    }, IDLE_FALLBACK_DELAY_MS);
+    return { cancel: () => clearTimeout(id) };
+  }
+
+  // Queue a tree to be searched for shadow hosts. Finding a host means visiting
+  // every element, since no selector crosses a shadow boundary, so the search
+  // runs in idle slices instead of blocking on a whole document at once.
+  function queueShadowWalk(root) {
+    if (!root || contextInvalidated) return;
+    shadowWalkQueue.push(root);
+    startShadowScanPump();
+  }
+
+  function startShadowScanPump() {
+    if (shadowScanHandle || contextInvalidated) return;
+    if (!shadowWalker && shadowWalkQueue.length === 0) return;
+    shadowScanHandle = scheduleIdle(pumpShadowScan);
+  }
+
+  // Register a host's shadow root and queue that root for its own walk, so
+  // nesting is handled by this pump rather than by unbounded recursion.
+  function collectShadowRoot(node) {
+    const shadow = node.shadowRoot;
+    if (!shadow || !registerShadowRoot(shadow)) return;
+    scanMedia(shadow);
+    shadowWalkQueue.push(shadow);
+  }
+
+  function pumpShadowScan(deadline) {
+    shadowScanHandle = null;
+    if (contextInvalidated || !extensionActive) return;
+
+    let untilDeadlineCheck = SHADOW_SCAN_BATCH;
+
+    while (shadowWalker || shadowWalkQueue.length > 0) {
+      if (!shadowWalker) {
+        const root = shadowWalkQueue.shift();
+        if (!root) continue;
+        if (root.nodeType === Node.ELEMENT_NODE && !root.isConnected) continue;
+        // createTreeWalker never yields its own root, so test it directly.
+        if (root.nodeType === Node.ELEMENT_NODE) collectShadowRoot(root);
+        shadowWalker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
       }
-    });
+
+      let node = shadowWalker.nextNode();
+      while (node) {
+        collectShadowRoot(node);
+
+        if (--untilDeadlineCheck <= 0) {
+          untilDeadlineCheck = SHADOW_SCAN_BATCH;
+          if (deadline.timeRemaining() <= 0) {
+            // Out of budget. The walker holds our position, so the next slice
+            // resumes exactly here instead of restarting the tree.
+            startShadowScanPump();
+            return;
+          }
+        }
+        node = shadowWalker.nextNode();
+      }
+
+      shadowWalker = null;
+    }
+  }
+
+  function cancelShadowScans() {
+    shadowScanHandle?.cancel();
+    shadowScanHandle = null;
+    shadowWalkQueue = [];
+    shadowWalker = null;
+  }
+
+  // Drop controllers for media that left the document. One sweep per mutation
+  // batch: mediaElements is small, and unlike walking the removed subtree this
+  // also catches media removed from inside a shadow root.
+  function detachDisconnectedMedia() {
+    for (const media of [...mediaElements.keys()]) {
+      if (!media.isConnected) detachController(media);
+    }
   }
 
   // Set up mutation observer for dynamic content
   function setupObserver() {
     const observerCallback = (mutations) => {
+      let sawRemoval = false;
+
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-          // Check if the node itself is a media element
-          if (isMediaElement(node)) {
-            attachController(node);
-          }
-
-          // Check children
-          const selector = settings.workOnAudio ? 'video, audio' : 'video';
-          const mediaInside = node.querySelectorAll?.(selector);
-          if (mediaInside) {
-            mediaInside.forEach(el => attachController(el));
-          }
+          scanMedia(node);
+          queueShadowWalk(node);
         }
-
-        // Handle removed nodes
-        for (const node of mutation.removedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          // A DOM move emits both removal and addition records. Only detach
-          // media that actually left the document.
-          if (isMediaElement(node) && !node.isConnected) {
-            detachController(node);
-          }
-          const selector = settings.workOnAudio ? 'video, audio' : 'video';
-          const mediaInside = node.querySelectorAll?.(selector);
-          if (mediaInside) {
-            mediaInside.forEach(el => {
-              if (!el.isConnected) detachController(el);
-            });
-          }
-        }
+        if (mutation.removedNodes.length > 0) sawRemoval = true;
       }
+
+      // A DOM move emits both a removal and an addition, and the callback runs
+      // after both are applied, so isConnected already tells moves apart from
+      // real removals.
+      if (sawRemoval) detachDisconnectedMedia();
     };
 
     if (domObserver) domObserver.disconnect();
+    // disconnect() drops every target, shadow roots included, so they have to be
+    // rediscovered and re-observed against the new instance.
+    observedShadowRoots = new WeakSet();
+    cancelShadowScans();
     domObserver = new MutationObserver(observerCallback);
 
     // Observe document.body if available, otherwise wait for it
@@ -481,13 +648,17 @@
     const handlePlay = () => {
       activeElement = media;
       startTimeTracking();
+      reportMediaState();
     };
     const handlePause = () => {
       if (![...mediaElements.keys()].some(element => !element.paused && !element.ended)) stopTimeTracking();
+      reportMediaState();
     };
 
-    // Update controller when speed changes externally
+    // Update controller when speed changes externally, and take the speed back
+    // if the site reset it out from under us.
     const handleRateChange = () => {
+      enforceDesiredSpeed(media);
       updateControllerDisplay(media);
       updatePipIndicator();
     };
@@ -532,6 +703,7 @@
       resetAutoHide(controller);
     }
 
+    reportMediaState();
     debug('Video Speed Pro: Attached to', media.tagName);
   }
 
@@ -542,7 +714,7 @@
       const timer = autoHideTimers.get(controller);
       if (timer) clearTimeout(timer);
       autoHideTimers.delete(controller);
-      controller.remove();
+      removeOverlay(controller);
       mediaElements.delete(media);
     }
     if (activeElement === media) {
@@ -569,13 +741,87 @@
     }
     abLoopState.delete(media);
     cleanupVolumeBoostForMedia(media);
+    delete media._vscDesiredSpeed;
+    delete media._vscReassertUntil;
+    delete media._vscCorrectionStart;
+    delete media._vscCorrectionCount;
+    delete media._vscEnforceCooldownUntil;
     if (mediaElements.size === 0) stopTimeTracking();
+    reportMediaState();
+  }
+
+  // Load the overlay stylesheet once per frame and share the parsed sheet across
+  // every shadow root. Awaited before the first scan, so no overlay is ever
+  // rendered unstyled.
+  async function loadControllerStyles() {
+    if (controllerStyleSheet !== null || controllerStyleHref) return;
+    const href = chrome.runtime.getURL('content/controller.css');
+    try {
+      const response = await fetch(href);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(await response.text());
+      controllerStyleSheet = sheet;
+    } catch (e) {
+      // A strict page CSP can block the fetch. A <link> per root still works
+      // because the browser, not the page, resolves it.
+      debug('Video Speed Pro: Falling back to linked styles', e);
+      controllerStyleHref = href;
+    }
+  }
+
+  // Build a page-DOM host with a closed shadow root holding our styles. The host
+  // is a transparent full-bleed layer, so overlays inside it position themselves
+  // exactly as they did when these styles were injected into the document.
+  function createShadowHost({ fixed = false, role = null } = {}) {
+    const host = document.createElement('div');
+    // The role class is the only thing about an overlay visible from the page
+    // DOM once its contents are behind a closed root; it keeps the overlays
+    // identifiable for debugging and for the manual test page's counter.
+    host.className = ['vsc-shadow-host', fixed && 'vsc-host-fixed', role && `vsc-host-${role}`]
+      .filter(Boolean).join(' ');
+    // These must survive hostile page CSS. A plain inline declaration is not
+    // enough: an author rule marked !important outranks it, and pages really do
+    // ship things like `div { position: static !important }`. Inline !important
+    // is the only tier above that, and :host rules lose to page rules outright.
+    host.style.setProperty('position', fixed ? 'fixed' : 'absolute', 'important');
+    host.style.setProperty('inset', '0', 'important');
+    host.style.setProperty('z-index', '2147483647', 'important');
+    host.style.setProperty('pointer-events', 'none', 'important');
+    host.style.setProperty('display', 'block', 'important');
+
+    const root = host.attachShadow({ mode: 'closed' });
+    if (controllerStyleSheet) {
+      root.adoptedStyleSheets = [controllerStyleSheet];
+    } else if (controllerStyleHref) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = controllerStyleHref;
+      root.append(link);
+    }
+
+    host._vscRoot = root;
+    return { host, root };
+  }
+
+  // Overlays are stored as their inner element, so every existing query against
+  // them keeps working; the host is reachable for positioning and removal.
+  function hostOf(element) {
+    return element?._vscHost || null;
+  }
+
+  function removeOverlay(element) {
+    (hostOf(element) || element)?.remove();
   }
 
   // Create controller UI
   function createController(media) {
+    const { host, root } = createShadowHost({ role: 'controller' });
     const controller = document.createElement('div');
     controller.className = 'vsc-controller';
+    controller._vscHost = host;
+    host._vscController = controller;
+    root.append(controller);
 
     if (settings.hideByDefault) {
       controller.classList.add('vsc-hidden');
@@ -602,7 +848,7 @@
     attachControllerEvents(controller, media);
 
     // Position controller on video
-    positionController(media, controller);
+    positionController(media, host, controller);
 
     return controller;
   }
@@ -688,7 +934,7 @@
             <span class="vsc-volume-value ${volumeBoostLevel > 100 ? 'boosted' : ''}">${volumeBoostLevel}%</span>
           </div>
           <div class="vsc-volume-slider-container">
-            <input type="range" class="vsc-slider vsc-volume-slider" data-action="volume-boost" aria-label="Volume boost" min="100" max="400" step="10" value="${volumeBoostLevel}">
+            <input type="range" class="vsc-slider vsc-volume-slider" data-action="volume-boost" aria-label="Volume boost" min="100" max="${VOLUME_BOOST_MAX}" step="10" value="${volumeBoostLevel}">
           </div>
         </div>
 
@@ -727,7 +973,7 @@
   }
 
   // Position controller relative to video
-  function positionController(media, controller) {
+  function positionController(media, host, controller) {
     // If media has no parent (not in DOM), we can't position the controller
     if (!media.parentElement) {
       console.warn('Video Speed Pro: Media element has no parent, cannot attach controller');
@@ -736,7 +982,7 @@
 
     // Check if we already have a wrapper for this video
     if (media.parentElement.classList.contains('vsc-wrapper')) {
-      media.parentElement.appendChild(controller);
+      media.parentElement.appendChild(host);
       debug('Video Speed Pro: Controller attached to existing wrapper');
       return;
     }
@@ -752,7 +998,7 @@
         if (style.position === 'static') {
           ytContainer.style.position = 'relative';
         }
-        ytContainer.appendChild(controller);
+        ytContainer.appendChild(host);
         debug('Video Speed Pro: Controller attached to YouTube player');
         return;
       }
@@ -798,7 +1044,7 @@
       
       // If container is close to video size, just append the controller
       if (widthDiff < 100 && heightDiff < 100) {
-        bestContainer.appendChild(controller);
+        bestContainer.appendChild(host);
         debug('Video Speed Pro: Controller attached to positioned container');
         return;
       }
@@ -810,7 +1056,7 @@
       
       controller.style.top = (videoTop + 10) + 'px';
       controller.style.right = (videoRight + 10) + 'px';
-      bestContainer.appendChild(controller);
+      bestContainer.appendChild(host);
       debug('Video Speed Pro: Controller attached with offset positioning');
       return;
     }
@@ -819,26 +1065,30 @@
     // Use a wrapper that doesn't affect layout
     const wrapper = document.createElement('div');
     wrapper.className = 'vsc-wrapper';
-    wrapper.style.cssText = 'position: relative; display: contents;';
-    
+
     // 'display: contents' makes the wrapper invisible to layout
     // But we need position:relative for the controller, so use a fallback
     // Check if display:contents is supported
     const supportsContents = CSS.supports('display', 'contents');
-    
+    let wrapperDisplay = 'contents';
+
     if (!supportsContents) {
       // Fallback: match the video's display
-      const mediaStyle = window.getComputedStyle(media);
-      const display = mediaStyle.display;
-      const wrapperDisplay = (display === 'inline' || display === 'inline-block') ? 'inline-block' : 'block';
-      wrapper.style.cssText = `position: relative; display: ${wrapperDisplay};`;
+      const display = window.getComputedStyle(media).display;
+      wrapperDisplay = (display === 'inline' || display === 'inline-block') ? 'inline-block' : 'block';
     }
+
+    // The wrapper stays in the page DOM, so it is the one part of the overlay a
+    // page can still restyle. It is also what the host positions against, so
+    // pin it the same way the host pins itself.
+    wrapper.style.setProperty('position', 'relative', 'important');
+    wrapper.style.setProperty('display', wrapperDisplay, 'important');
     
     // Check if parent still exists before modifying DOM
     if (media.parentElement) {
       media.parentElement.insertBefore(wrapper, media);
       wrapper.appendChild(media);
-      wrapper.appendChild(controller);
+      wrapper.appendChild(host);
       debug('Video Speed Pro: Controller wrapped and attached');
     } else {
       console.warn('Video Speed Pro: Media parent disappeared during positioning');
@@ -848,12 +1098,13 @@
   // Update controller position when video moves/resizes
   function updateControllerPosition(media) {
     const controller = mediaElements.get(media);
-    if (!controller || !controller.parentElement) return;
-    
+    const host = hostOf(controller);
+    if (!host || !host.parentElement) return;
+
     // Skip if controller is in a wrapper (position is already correct)
-    if (controller.parentElement.classList.contains('vsc-wrapper')) return;
-    
-    const container = controller.parentElement;
+    if (host.parentElement.classList.contains('vsc-wrapper')) return;
+
+    const container = host.parentElement;
     const containerRect = container.getBoundingClientRect();
     const videoRect = media.getBoundingClientRect();
     
@@ -1007,28 +1258,70 @@
     setSpeed(media, newSpeed);
   }
 
+  // Write a rate without recording it as the user's intent.
+  function applyPlaybackRate(media, speed) {
+    try {
+      media.playbackRate = speed;
+      return true;
+    } catch (e) {
+      debug('Video Speed Pro: Media rejected playback rate', speed, e);
+      return false;
+    }
+  }
+
+  // Record the speed the user asked for. The write below fires ratechange, which
+  // enforceDesiredSpeed uses to notice when the site overwrites us afterwards.
+  function setDesiredSpeed(media, speed) {
+    const now = Date.now();
+    media._vscDesiredSpeed = speed;
+    media._vscReassertUntil = now + SPEED_REASSERT_WINDOW_MS;
+    media._vscCorrectionStart = now;
+    media._vscCorrectionCount = 0;
+    media._vscEnforceCooldownUntil = 0;
+  }
+
+  // Re-apply the user's speed when something else changed it. Re-entry is safe:
+  // a successful correction leaves playbackRate at the desired value, so the
+  // ratechange it triggers exits at the equality check below.
+  function enforceDesiredSpeed(media) {
+    const desired = media._vscDesiredSpeed;
+    if (typeof desired !== 'number') return;
+    if (Math.abs(media.playbackRate - desired) < SPEED_EPSILON) return;
+
+    const now = Date.now();
+    // Force mode defends the speed indefinitely. Otherwise only defend the rate
+    // we just set, so the site's own speed menu keeps working.
+    if (!settings?.forceSpeed && now >= (media._vscReassertUntil || 0)) return;
+    if (now < (media._vscEnforceCooldownUntil || 0)) return;
+
+    if (now - (media._vscCorrectionStart || 0) > SPEED_CORRECTION_WINDOW_MS) {
+      media._vscCorrectionStart = now;
+      media._vscCorrectionCount = 0;
+    }
+
+    media._vscCorrectionCount = (media._vscCorrectionCount || 0) + 1;
+    if (media._vscCorrectionCount > SPEED_CORRECTION_LIMIT) {
+      // Either the page rewrites the rate faster than we can correct it, or the
+      // media clamps our value and never reaches it. Back off instead of
+      // spinning on ratechange.
+      media._vscEnforceCooldownUntil = now + SPEED_CORRECTION_COOLDOWN_MS;
+      debug('Video Speed Pro: Backing off speed enforcement at', desired);
+      return;
+    }
+
+    applyPlaybackRate(media, desired);
+  }
+
   // Set playback speed
   function setSpeed(media, speed) {
     speed = Number(speed);
     if (!Number.isFinite(speed)) return;
     speed = Math.round(Math.max(0.1, Math.min(16, speed)) * 100) / 100;
-    
-    // Set speed and force it to stick (some sites like YouTube may try to reset it)
-    media.playbackRate = speed;
-    
-    // For YouTube and similar sites, they may reset speed on certain events
-    // Use a brief interval to ensure the speed sticks
-    if (isYouTube()) {
-      let attempts = 0;
-      const enforceSpeed = setInterval(() => {
-        if (media.playbackRate !== speed && attempts < 5) {
-          media.playbackRate = speed;
-          attempts++;
-        } else {
-          clearInterval(enforceSpeed);
-        }
-      }, 100);
-    }
+
+    // Record intent before writing so the resulting ratechange is not mistaken
+    // for the site fighting us.
+    setDesiredSpeed(media, speed);
+    applyPlaybackRate(media, speed);
 
     updateControllerDisplay(media);
     highlightController(media);
@@ -1216,16 +1509,11 @@
     feedback.style.setProperty('--vsc-accent-color', accentColor);
 
     // Position near the video
-    const controller = mediaElements.get(media);
-    if (controller && controller.parentNode) {
-      controller.parentNode.appendChild(feedback);
-    } else {
-      document.body.appendChild(feedback);
-      feedback.style.position = 'fixed';
-      feedback.style.top = '50%';
-      feedback.style.left = '50%';
-      feedback.style.transform = 'translate(-50%, -50%)';
-    }
+    const anchor = hostOf(mediaElements.get(media));
+    const { host, root } = createShadowHost({ fixed: !anchor?.parentNode, role: 'feedback' });
+    root.append(feedback);
+    feedback._vscHost = host;
+    (anchor?.parentNode || document.body).appendChild(host);
 
     // Animate and remove
     requestAnimationFrame(() => {
@@ -1234,7 +1522,7 @@
 
     setTimeout(() => {
       feedback.classList.remove('vsc-show');
-      setTimeout(() => feedback.remove(), 300);
+      setTimeout(() => removeOverlay(feedback), 300);
     }, 1500);
   }
 
@@ -1592,10 +1880,22 @@
       const gainNode = audioContext.createGain();
       const sourceNode = audioContext.createMediaElementSource(media);
 
-      sourceNode.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      // Boosting straight into the destination clips: at 6x gain anything above
+      // -15.5 dBFS distorts, which is most material. A limiter after the gain
+      // trades a little loudness for not shredding the audio. Threshold sits
+      // just under 0 dBFS so it is close to inert until the signal would clip.
+      const limiterNode = audioContext.createDynamicsCompressor();
+      limiterNode.threshold.value = -1;
+      limiterNode.knee.value = 0;
+      limiterNode.ratio.value = 20;
+      limiterNode.attack.value = 0.003;
+      limiterNode.release.value = 0.25;
 
-      const nodes = { audioContext, gainNode, sourceNode };
+      sourceNode.connect(gainNode);
+      gainNode.connect(limiterNode);
+      limiterNode.connect(audioContext.destination);
+
+      const nodes = { audioContext, gainNode, limiterNode, sourceNode };
       audioContextMap.set(media, nodes);
 
       return nodes;
@@ -1634,6 +1934,9 @@
       nodes.gainNode.disconnect();
     } catch {}
     try {
+      nodes.limiterNode?.disconnect();
+    } catch {}
+    try {
       if (nodes.audioContext.state !== 'closed') {
         nodes.audioContext.close();
       }
@@ -1646,9 +1949,9 @@
     mediaElements.forEach((_controller, mediaEl) => updateVolumeBoostDisplay(mediaEl));
   }
 
-  // Set volume boost level (100 = normal, up to 400)
+  // Set volume boost level (100 = normal, up to VOLUME_BOOST_MAX)
   function setVolumeBoost(media, level, options = {}) {
-    volumeBoostLevel = Math.max(100, Math.min(400, level));
+    volumeBoostLevel = Math.max(100, Math.min(VOLUME_BOOST_MAX, level));
     const { showFeedback: shouldShowFeedback = true } = options;
 
     mediaElements.forEach((_controller, mediaEl) => {
@@ -1697,7 +2000,7 @@
       hostname: window.location.hostname
     });
     if (typeof response.level === 'number') {
-      volumeBoostLevel = Math.max(100, Math.min(400, response.level));
+      volumeBoostLevel = Math.max(100, Math.min(VOLUME_BOOST_MAX, response.level));
     }
   }
 
@@ -1719,16 +2022,11 @@
     feedback.style.setProperty('--vsc-bg-color', bgColor);
     feedback.style.setProperty('--vsc-accent-color', accentColor);
 
-    const controller = mediaElements.get(media);
-    if (controller && controller.parentNode) {
-      controller.parentNode.appendChild(feedback);
-    } else {
-      document.body.appendChild(feedback);
-      feedback.style.position = 'fixed';
-      feedback.style.top = '50%';
-      feedback.style.left = '50%';
-      feedback.style.transform = 'translate(-50%, -50%)';
-    }
+    const anchor = hostOf(mediaElements.get(media));
+    const { host, root } = createShadowHost({ fixed: !anchor?.parentNode, role: 'feedback' });
+    root.append(feedback);
+    feedback._vscHost = host;
+    (anchor?.parentNode || document.body).appendChild(host);
 
     requestAnimationFrame(() => {
       feedback.classList.add('vsc-show');
@@ -1736,7 +2034,7 @@
 
     setTimeout(() => {
       feedback.classList.remove('vsc-show');
-      setTimeout(() => feedback.remove(), 300);
+      setTimeout(() => removeOverlay(feedback), 300);
     }, 1200);
   }
 
@@ -1927,7 +2225,8 @@
     if (urlRuleResponse.matched && urlRuleResponse.speed) {
       // Wait a bit for video to initialize
       setTimeout(() => {
-        media.playbackRate = urlRuleResponse.speed;
+        setDesiredSpeed(media, urlRuleResponse.speed);
+        applyPlaybackRate(media, urlRuleResponse.speed);
         updateControllerDisplay(media);
         debug(`Video Speed Pro: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
       }, 100);
@@ -1942,7 +2241,8 @@
 
     if (sitePresetResponse.speed) {
       setTimeout(() => {
-        media.playbackRate = sitePresetResponse.speed;
+        setDesiredSpeed(media, sitePresetResponse.speed);
+        applyPlaybackRate(media, sitePresetResponse.speed);
         updateControllerDisplay(media);
       }, 100);
       return;
@@ -1960,11 +2260,50 @@
       // Wait a bit for video to initialize
       setTimeout(() => {
         if (settings.forceSpeed || media.playbackRate === 1.0) {
-          media.playbackRate = response.speed;
+          setDesiredSpeed(media, response.speed);
+          applyPlaybackRate(media, response.speed);
           updateControllerDisplay(media);
         }
       }, 100);
     }
+  }
+
+  // Describe this frame's media so the background can elect one frame per tab.
+  // Without this every frame receives every command, so a single keypress can
+  // hit the real video and a video ad in an iframe at the same time.
+  function computeFrameMediaState() {
+    let playing = false;
+    let playingArea = 0;
+    let idleArea = 0;
+
+    for (const [media] of mediaElements) {
+      if (!media.isConnected) continue;
+      const rect = media.getBoundingClientRect();
+      const area = Math.max(0, rect.width) * Math.max(0, rect.height);
+      if (!media.paused && !media.ended) {
+        playing = true;
+        playingArea = Math.max(playingArea, area);
+      } else {
+        idleArea = Math.max(idleArea, area);
+      }
+    }
+
+    return {
+      hasMedia: extensionActive && !isBlocked && mediaElements.size > 0,
+      playing,
+      area: playing ? playingArea : idleArea,
+      isTop: window.top === window
+    };
+  }
+
+  function reportMediaState() {
+    if (contextInvalidated || frameReportTimer) return;
+    // Coalesce bursts: attaching ten videos should send one report, not ten.
+    frameReportTimer = setTimeout(() => {
+      frameReportTimer = null;
+      if (contextInvalidated) return;
+      sendMessage({ type: 'reportMediaState', state: computeFrameMediaState() });
+    }, FRAME_REPORT_DELAY_MS);
   }
 
   // Find currently active/playing media
@@ -2128,18 +2467,27 @@
   }
 
   // Context menu for quick speed access
+  function closeContextMenu() {
+    if (!contextMenu) return;
+    removeOverlay(contextMenu);
+    contextMenu = null;
+  }
+
   function setupContextMenu() {
+    if (contextMenuBound) return;
+    contextMenuBound = true;
+
     document.addEventListener('contextmenu', (e) => {
       if (isBlocked || !extensionActive) return;
-      // Only show on video elements or controller
+      // Only show on video elements or controller. Events from inside a closed
+      // shadow root are retargeted to the host, so match the host, not the
+      // controller class, which is no longer visible from the document.
       const video = e.target.closest('video');
-      const controller = e.target.closest('.vsc-controller');
+      const overlay = e.target.closest('.vsc-shadow-host');
 
-      if (!video && !controller) return;
+      if (!video && !overlay) return;
 
-      // Remove existing menu
-      const existingMenu = document.querySelector('.vsc-context-menu');
-      if (existingMenu) existingMenu.remove();
+      closeContextMenu();
 
       e.preventDefault();
 
@@ -2172,7 +2520,11 @@
       menu.style.left = e.clientX + 'px';
       menu.style.top = e.clientY + 'px';
 
-      document.body.appendChild(menu);
+      const { host, root } = createShadowHost({ fixed: true, role: 'menu' });
+      root.append(menu);
+      menu._vscHost = host;
+      contextMenu = menu;
+      document.body.appendChild(host);
 
       // Handle menu clicks
       menu.addEventListener('click', (ev) => {
@@ -2180,13 +2532,13 @@
         if (item && item.dataset.speed) {
           setSpeed(media, parseFloat(item.dataset.speed));
         }
-        menu.remove();
+        closeContextMenu();
       });
 
       // Close menu on outside click
       setTimeout(() => {
         document.addEventListener('click', function closeMenu() {
-          menu.remove();
+          closeContextMenu();
           document.removeEventListener('click', closeMenu);
         }, { once: true });
       }, 10);
@@ -2247,7 +2599,10 @@
       </div>
     `;
 
-    document.body.appendChild(pipIndicator);
+    const { host, root } = createShadowHost({ fixed: true, role: 'pip' });
+    root.append(pipIndicator);
+    pipIndicator._vscHost = host;
+    document.body.appendChild(host);
 
     // Make it draggable
     makeDraggable(pipIndicator);
@@ -2289,7 +2644,7 @@
   // Remove PiP indicator
   function removePipIndicator() {
     if (pipIndicator) {
-      pipIndicator.remove();
+      removeOverlay(pipIndicator);
       pipIndicator = null;
     }
   }
@@ -2406,17 +2761,49 @@
   // Fallback: Poll for URL changes (for browsers without Navigation API)
   function startPollingUrlDetection() {
     debug('Video Speed Pro: Using polling for URL detection');
+    if (urlPollBound) return;
+    urlPollBound = true;
 
-    if (urlCheckInterval) return;
+    // Only the fallback path pays for this listener. Browsers with the
+    // Navigation API never start a poll, so they never reach here.
+    document.addEventListener('visibilitychange', syncUrlPollToVisibility);
+    syncUrlPollToVisibility();
+  }
+
+  // Back the poll off in a hidden tab rather than stopping it. A background tab
+  // can still navigate itself -- an SPA advancing to the next track or video --
+  // and dropping the poll entirely would leave speed rules unapplied until the
+  // tab was looked at again.
+  function syncUrlPollToVisibility() {
+    if (contextInvalidated) {
+      stopUrlPoll();
+      return;
+    }
+
+    const hidden = document.visibilityState === 'hidden';
+    const interval = hidden ? URL_POLL_HIDDEN_MS : URL_POLL_VISIBLE_MS;
+    if (urlCheckInterval && urlPollIntervalMs === interval) return;
+
+    stopUrlPoll();
+    urlPollIntervalMs = interval;
     urlCheckInterval = setInterval(() => {
-      // Skip if context is invalidated
       if (contextInvalidated) {
-        clearInterval(urlCheckInterval);
+        stopUrlPoll();
         return;
       }
-
       handleUrlChange();
-    }, 1000);
+    }, interval);
+
+    // Becoming visible re-checks straight away, so a navigation that happened
+    // while hidden is not left waiting for the next tick.
+    if (!hidden) handleUrlChange();
+  }
+
+  function stopUrlPoll() {
+    if (!urlCheckInterval) return;
+    clearInterval(urlCheckInterval);
+    urlCheckInterval = null;
+    urlPollIntervalMs = null;
   }
 
   // Initialize when DOM is ready

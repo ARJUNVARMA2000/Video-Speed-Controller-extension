@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Video Speed Controller Pro",
+  "name": "__MSG_appName__",
   "version": "1.4.0",
-  "description": "Speed up or slow down videos on YouTube, Netflix & any site. Volume boost 400%, screenshots, A-B loop, filters & hotkeys.",
+  "default_locale": "en",
+  "description": "__MSG_appDesc__",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -26,11 +27,24 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["browser-polyfill.min.js", "content/content.js"],
-      "css": ["content/controller.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/content.js"
+      ],
       "run_at": "document_end",
       "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/controller.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "commands": {
@@ -57,12 +71,6 @@
         "default": "Alt+R"
       },
       "description": "Reset to normal speed"
-    }
-  },
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "video-speed-controller@extension",
-      "strict_min_version": "109.0"
     }
   }
 }

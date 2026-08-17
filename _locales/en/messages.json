@@ -1,0 +1,355 @@
+{
+  "a11y_add_allowed_site": {
+    "message": "Add allowed site"
+  },
+  "a11y_add_blocked_site": {
+    "message": "Add blocked site"
+  },
+  "a11y_add_intro_and_outro_rule": {
+    "message": "Add intro and outro rule"
+  },
+  "a11y_add_url_speed_rule": {
+    "message": "Add URL speed rule"
+  },
+  "a11y_close_issue_report": {
+    "message": "Close issue report"
+  },
+  "a11y_describe_the_issue_in_detail_what_were_y": {
+    "message": "Describe the issue in detail. What were you trying to do? What happened instead?"
+  },
+  "a11y_domain_or_pattern_to_allow": {
+    "message": "Domain or pattern to allow"
+  },
+  "a11y_domain_or_pattern_to_block": {
+    "message": "Domain or pattern to block"
+  },
+  "a11y_enable_video_speed_controller": {
+    "message": "Enable Video Speed Controller"
+  },
+  "a11y_enter_domain_wildcard_or_regex": {
+    "message": "Enter domain, wildcard, or /regex/"
+  },
+  "a11y_intro": {
+    "message": "Intro"
+  },
+  "a11y_intro_seconds": {
+    "message": "Intro seconds"
+  },
+  "a11y_outro": {
+    "message": "Outro"
+  },
+  "a11y_outro_seconds": {
+    "message": "Outro seconds"
+  },
+  "a11y_set_playback_speed": {
+    "message": "Set playback speed"
+  },
+  "a11y_set_speed_to_0_5_times": {
+    "message": "Set speed to 0.5 times"
+  },
+  "a11y_set_speed_to_0_75_times": {
+    "message": "Set speed to 0.75 times"
+  },
+  "a11y_set_speed_to_1_25_times": {
+    "message": "Set speed to 1.25 times"
+  },
+  "a11y_set_speed_to_1_5_times": {
+    "message": "Set speed to 1.5 times"
+  },
+  "a11y_set_speed_to_2_times": {
+    "message": "Set speed to 2 times"
+  },
+  "a11y_set_speed_to_3_times": {
+    "message": "Set speed to 3 times"
+  },
+  "a11y_set_speed_to_normal": {
+    "message": "Set speed to normal"
+  },
+  "a11y_site_e_g_youtube_com": {
+    "message": "Site (e.g., youtube.com)"
+  },
+  "a11y_site_for_intro_and_outro_rule": {
+    "message": "Site for intro and outro rule"
+  },
+  "a11y_speed": {
+    "message": "Speed"
+  },
+  "a11y_url_pattern": {
+    "message": "URL pattern"
+  },
+  "a11y_url_pattern_e_g_shorts": {
+    "message": "URL pattern (e.g., /shorts)"
+  },
+  "a11y_url_rule_speed": {
+    "message": "URL rule speed"
+  },
+  "appDesc": {
+    "message": "Speed up or slow down videos on YouTube, Netflix & any site. Volume boost 600%, screenshots, A-B loop, filters & hotkeys.",
+    "description": "Extension description shown in the store listing."
+  },
+  "appName": {
+    "message": "Video Speed Controller Pro",
+    "description": "Extension name shown in the store and browser UI."
+  },
+  "ui_a_b_loop": {
+    "message": "A-B Loop"
+  },
+  "ui_access_mode": {
+    "message": "Access Mode"
+  },
+  "ui_add": {
+    "message": "Add"
+  },
+  "ui_allow_all_block_list_or_allow_list": {
+    "message": "Allow all, block list, or allow list"
+  },
+  "ui_allow_on_all_sites": {
+    "message": "Allow on all sites"
+  },
+  "ui_allow_only_listed_sites": {
+    "message": "Allow only listed sites"
+  },
+  "ui_appearance": {
+    "message": "Appearance"
+  },
+  "ui_auto_hide_timer": {
+    "message": "Auto-Hide Timer"
+  },
+  "ui_auto_skip_on_play": {
+    "message": "Auto-Skip on Play"
+  },
+  "ui_auto_skip_or_use_hotkeys": {
+    "message": "Auto-skip or use hotkeys"
+  },
+  "ui_automatically_skip_intros_and_outros_or": {
+    "message": "Automatically skip intros and outros, or use hotkeys to skip manually"
+  },
+  "ui_badge_colors": {
+    "message": "Badge Colors"
+  },
+  "ui_behavior": {
+    "message": "Behavior"
+  },
+  "ui_bg": {
+    "message": "BG"
+  },
+  "ui_block_listed_sites": {
+    "message": "Block listed sites"
+  },
+  "ui_brightness_contrast_saturation": {
+    "message": "Brightness, contrast, saturation"
+  },
+  "ui_browser": {
+    "message": "Browser:"
+  },
+  "ui_browser_sync": {
+    "message": "Browser Sync"
+  },
+  "ui_capture_current_video_frame_p_key": {
+    "message": "Capture current video frame (P key)"
+  },
+  "ui_checking": {
+    "message": "Checking…"
+  },
+  "ui_checking_2": {
+    "message": "Checking..."
+  },
+  "ui_choose_display_style": {
+    "message": "Choose display style"
+  },
+  "ui_control_audio_elements_too": {
+    "message": "Control audio elements too"
+  },
+  "ui_controller_mode": {
+    "message": "Controller Mode"
+  },
+  "ui_controller_transparency": {
+    "message": "Controller transparency"
+  },
+  "ui_current_site": {
+    "message": "Current site"
+  },
+  "ui_customize_overlay_colors": {
+    "message": "Customize overlay colors"
+  },
+  "ui_default_intro_skip": {
+    "message": "Default Intro Skip"
+  },
+  "ui_default_outro_skip": {
+    "message": "Default Outro Skip"
+  },
+  "ui_enable_intro_outro_skip": {
+    "message": "Enable Intro/Outro Skip"
+  },
+  "ui_export": {
+    "message": "Export"
+  },
+  "ui_extension": {
+    "message": "Extension:"
+  },
+  "ui_fade_after_inactivity_0_off": {
+    "message": "Fade after inactivity (0 = off)"
+  },
+  "ui_force_saved_speed": {
+    "message": "Force Saved Speed"
+  },
+  "ui_full_panel": {
+    "message": "Full (Panel)"
+  },
+  "ui_go_beyond_100_volume_up_to_600": {
+    "message": "Go beyond 100% volume (up to 600%)"
+  },
+  "ui_help_us_improve_describe_the_issue_you_e": {
+    "message": "Help us improve! Describe the issue you encountered."
+  },
+  "ui_hide_by_default": {
+    "message": "Hide by Default"
+  },
+  "ui_import": {
+    "message": "Import"
+  },
+  "ui_include_current_page_url": {
+    "message": "Include current page URL"
+  },
+  "ui_intro_outro_skip": {
+    "message": "Intro/Outro Skip"
+  },
+  "ui_keep_audio_pitch_when_changing_speed": {
+    "message": "Keep audio pitch when changing speed"
+  },
+  "ui_keyboard_shortcuts": {
+    "message": "Keyboard Shortcuts"
+  },
+  "ui_loading": {
+    "message": "Loading..."
+  },
+  "ui_loop_between_two_points_and_keys": {
+    "message": "Loop between two points ([ and ] keys)"
+  },
+  "ui_minimal_badge": {
+    "message": "Minimal (Badge)"
+  },
+  "ui_new_features": {
+    "message": "New Features"
+  },
+  "ui_off": {
+    "message": "Off"
+  },
+  "ui_opacity": {
+    "message": "Opacity"
+  },
+  "ui_override_intro_outro_times_for_specific": {
+    "message": "Override intro/outro times for specific sites"
+  },
+  "ui_override_player_defaults": {
+    "message": "Override player defaults"
+  },
+  "ui_per_site_rules": {
+    "message": "Per-Site Rules"
+  },
+  "ui_pip_speed_indicator": {
+    "message": "PiP Speed Indicator"
+  },
+  "ui_platform": {
+    "message": "Platform:"
+  },
+  "ui_preserve_pitch": {
+    "message": "Preserve Pitch"
+  },
+  "ui_press_shortcut_to_show": {
+    "message": "Press shortcut to show"
+  },
+  "ui_press_to_skip_intro_manually": {
+    "message": "Press to skip intro manually"
+  },
+  "ui_press_to_skip_to_end_next": {
+    "message": "Press to skip to end/next"
+  },
+  "ui_quick_speed": {
+    "message": "Quick Speed"
+  },
+  "ui_remember_filters": {
+    "message": "Remember Filters"
+  },
+  "ui_remember_speed": {
+    "message": "Remember Speed"
+  },
+  "ui_remember_volume_boost": {
+    "message": "Remember Volume Boost"
+  },
+  "ui_report_an_issue": {
+    "message": "Report an Issue"
+  },
+  "ui_reset": {
+    "message": "Reset"
+  },
+  "ui_save_brightness_contrast_saturation_per": {
+    "message": "Save brightness/contrast/saturation per site"
+  },
+  "ui_save_speed_per_website": {
+    "message": "Save speed per website"
+  },
+  "ui_save_volume_boost_level_per_site": {
+    "message": "Save volume boost level per site"
+  },
+  "ui_screenshot": {
+    "message": "Screenshot"
+  },
+  "ui_seconds_before_end_to_skip": {
+    "message": "Seconds before end to skip"
+  },
+  "ui_seconds_to_skip_at_start": {
+    "message": "Seconds to skip at start"
+  },
+  "ui_set_default_speeds_for_specific_url_patt": {
+    "message": "Set default speeds for specific URL patterns (e.g., \"/shorts\" = 1x)"
+  },
+  "ui_show_floating_controller_in_pip_mode": {
+    "message": "Show floating controller in PiP mode"
+  },
+  "ui_site_access": {
+    "message": "Site Access"
+  },
+  "ui_skip_intro_automatically_when_video_star": {
+    "message": "Skip intro automatically when video starts"
+  },
+  "ui_skip_intro_hotkey": {
+    "message": "Skip Intro Hotkey"
+  },
+  "ui_skip_outro_hotkey": {
+    "message": "Skip Outro Hotkey"
+  },
+  "ui_speed_controller": {
+    "message": "Speed Controller"
+  },
+  "ui_system_information_auto_detected": {
+    "message": "System Information (auto-detected)"
+  },
+  "ui_text": {
+    "message": "Text"
+  },
+  "ui_text_2": {
+    "message": "×"
+  },
+  "ui_these_features_are_available_in_the_on_v": {
+    "message": "These features are available in the on-video controller panel (Full mode):"
+  },
+  "ui_time_saved": {
+    "message": "Time Saved"
+  },
+  "ui_url_speed_rules": {
+    "message": "URL Speed Rules"
+  },
+  "ui_video_filters": {
+    "message": "Video Filters"
+  },
+  "ui_volume_boost": {
+    "message": "Volume Boost"
+  },
+  "ui_what_went_wrong": {
+    "message": "What went wrong?"
+  },
+  "ui_work_on_audio": {
+    "message": "Work on Audio"
+  }
+}

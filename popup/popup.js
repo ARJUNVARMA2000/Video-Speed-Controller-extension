@@ -11,7 +11,7 @@
     'rewind': 'Rewind',
     'advance': 'Advance',
     'reset-speed': 'Reset Speed',
-    'preferred-speed': 'Preferred Speed',
+    'preferred-speed': 'Hold to Boost',
     'frame-forward': 'Next Frame',
     'frame-backward': 'Previous Frame',
     'screenshot': 'Screenshot',
@@ -111,8 +111,37 @@
     btnOpenGithub: document.getElementById('btn-open-github')
   };
 
+  // Apply translations over the markup. The English text stays inline in
+  // popup.html as the fallback, so a missing key or an i18n failure leaves the
+  // popup exactly as it renders untranslated rather than blank.
+  function applyTranslations(root = document) {
+    const translate = key => {
+      try {
+        return chrome.i18n?.getMessage?.(key) || '';
+      } catch {
+        return '';
+      }
+    };
+
+    for (const el of root.querySelectorAll('[data-i18n]')) {
+      const text = translate(el.dataset.i18n);
+      if (text) el.textContent = text;
+    }
+    for (const [dataKey, attr] of [['i18nAria', 'aria-label'], ['i18nPlaceholder', 'placeholder'], ['i18nTitle', 'title']]) {
+      for (const el of root.querySelectorAll(`[data-${attr === 'aria-label' ? 'i18n-aria' : attr === 'placeholder' ? 'i18n-placeholder' : 'i18n-title'}]`)) {
+        const text = translate(el.dataset[dataKey]);
+        if (text) el.setAttribute(attr, text);
+      }
+    }
+
+    const title = translate('appName');
+    if (title) document.title = title;
+  }
+
   // Initialize popup
   async function init() {
+    applyTranslations();
+
     try {
       const stored = await chrome.runtime.sendMessage({ type: 'getSettings' });
       if (stored?.error) throw new Error(stored.error);
@@ -157,10 +186,24 @@
     }
   }
 
+  // Route through the background so the tab's elected media frame answers.
+  // Sending to the tab directly reaches every frame and keeps whichever replies
+  // first, which on pages with embeds or video ads is not the video the user means.
+  async function sendToActiveFrame(message) {
+    if (!currentTabId) throw new Error('No active tab');
+    const result = await chrome.runtime.sendMessage({
+      type: 'sendToActiveFrame',
+      tabId: currentTabId,
+      message
+    });
+    if (!result?.success) throw new Error(result?.error || 'No content script in this tab');
+    return result.response;
+  }
+
   async function loadActiveMediaState() {
     if (!currentTabId) return;
     try {
-      const state = await chrome.tabs.sendMessage(currentTabId, { type: 'getActiveState' });
+      const state = await sendToActiveFrame({ type: 'getActiveState' });
       if (!state?.found) {
         setSiteMessage('No controllable video found on this page.');
         return;
@@ -495,7 +538,7 @@
       if (!currentTabId) return;
 
       try {
-        const response = await chrome.tabs.sendMessage(currentTabId, { type: 'setSpeed', speed });
+        const response = await sendToActiveFrame({ type: 'setSpeed', speed });
         if (!response?.success) throw new Error(response?.error || 'No active video');
         setCurrentSpeed(response.speed);
         setSiteMessage('Speed updated.');

@@ -1,5 +1,23 @@
 /* Video Speed Controller Pro - Overlay Styles */
 
+/*
+ * Loaded into a closed shadow root per overlay, never into the page. The host
+ * element is a transparent full-bleed layer, so everything below positions
+ * itself in the same coordinate space it used when these styles were injected
+ * into the document directly.
+ */
+:host {
+  all: initial;
+  position: absolute;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+:host(.vsc-host-fixed) {
+  position: fixed;
+}
+
 .vsc-controller :where(button, input):focus-visible,
 .vsc-pip-indicator button:focus-visible,
 .vsc-context-menu :focus-visible {
@@ -330,20 +348,17 @@
   box-shadow: 0 0 15px color-mix(in srgb, var(--vsc-accent-color) 50%, transparent);
 }
 
-/* Wrapper for video container positioning */
-.vsc-wrapper {
-  position: relative !important;
-  /* Don't interfere with existing layout */
-}
-
-/* When using display:contents fallback, this helps maintain layout */
-.vsc-wrapper:not([style*="contents"]) {
-  display: inline-block;
-}
+/*
+ * .vsc-wrapper rules intentionally removed: the wrapper is the one overlay part
+ * that stays in the page DOM, so this sheet -- which now only ever loads inside
+ * a shadow root -- can never reach it. Its layout is pinned with inline
+ * !important in positionController instead.
+ */
 
 /* Context Menu */
 .vsc-context-menu {
   position: fixed;
+  pointer-events: auto;
   z-index: 2147483647;
   min-width: 150px;
   padding: 8px 0;
@@ -450,6 +465,7 @@
 /* Picture-in-Picture Floating Indicator */
 .vsc-pip-indicator {
   position: fixed;
+  pointer-events: auto;
   bottom: 100px;
   right: 20px;
   z-index: 2147483647;

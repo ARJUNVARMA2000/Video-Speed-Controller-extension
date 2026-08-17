@@ -104,6 +104,25 @@ npm run package
 
 The release artifact is written to `dist/video-speed-controller-v<version>.zip`. Development files and tests are excluded.
 
+## Keyboard Shortcuts
+
+Defaults; all of them are remappable from the popup.
+
+| Key | Action |
+| --- | --- |
+| `V` | Show/hide the controller |
+| `S` / `D` | Decrease / increase speed by 0.1x |
+| `R` | Reset to 1x |
+| `Z` / `X` | Rewind / advance 10 seconds |
+| `G` | **Hold to boost** — speeds up while held, restores on release |
+| `,` / `.` | Previous / next frame |
+| `P` | Screenshot the current frame |
+| `[` / `]` | Set A-B loop points |
+| `\` | Clear the A-B loop |
+
+`G` is a press-and-hold control rather than a toggle: it applies the configured speed for as
+long as the key is down and restores the previous speed when released.
+
 ## Site and URL Patterns
 
 - Plain text, such as `youtube.com`, performs a case-insensitive substring match.
@@ -112,9 +131,17 @@ The release artifact is written to `dist/video-speed-controller-v<version>.zip`.
 
 The first matching URL speed rule wins.
 
+## Browser Support
+
+Chrome and Chromium-based browsers (Edge, Brave, Arc). **Firefox is not supported.** Firefox
+does not implement `background.service_worker`, so the extension's entire background layer --
+settings storage, message handling, and commands -- would be absent there. Supporting it needs
+an event-page background script rather than a manifest tweak.
+
 ## Known Limitations
 
 - Canvas- or WebGL-rendered players without an HTML `<video>` or `<audio>` element cannot be controlled.
+- Media inside a closed shadow root cannot be reached. Open shadow roots, including nested ones and roots that receive media after page load, are supported.
 - Some DRM-protected media and live streams may reject non-standard playback rates.
 - Screenshot capture can be blocked when a remote video does not permit canvas access.
 
