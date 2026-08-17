@@ -33,8 +33,12 @@
 
   // State
   let settings = {};
+  let persistedSettings = {};
+  let saveQueue = Promise.resolve();
   let recordingInput = null;
   let currentHostname = null;
+  let currentTabId = null;
+  let lastFocusedElement = null;
 
   // DOM Elements
   const elements = {
@@ -66,6 +70,9 @@
     notification: document.getElementById('notification'),
     speedPresetsBar: document.querySelector('.speed-presets-bar'),
     timeSaved: document.getElementById('time-saved'),
+    currentSite: document.getElementById('current-site'),
+    currentSpeed: document.getElementById('current-speed'),
+    siteMessage: document.getElementById('site-message'),
     urlRulePattern: document.getElementById('url-rule-pattern'),
     urlRuleSpeed: document.getElementById('url-rule-speed'),
     urlRuleAdd: document.getElementById('url-rule-add'),
@@ -106,33 +113,92 @@
 
   // Initialize popup
   async function init() {
-    // Load settings
-    settings = await chrome.runtime.sendMessage({ type: 'getSettings' });
+    try {
+      const stored = await chrome.runtime.sendMessage({ type: 'getSettings' });
+      if (stored?.error) throw new Error(stored.error);
+      persistedSettings = VSCSettings.normalizeSettings(stored);
+      settings = { ...persistedSettings, timeSaved: Number(stored?.timeSaved) || 0 };
 
-    await loadActiveSite();
-
-    // Apply settings to UI
-    applySettingsToUI();
-
-    // Set up event listeners
-    setupEventListeners();
+      applySettingsToUI();
+      setupEventListeners();
+      applyAccessibilityLabels();
+      await loadActiveSite();
+    } catch (error) {
+      console.error('Video Speed Pro: Popup initialization failed', error);
+      showNotification('Could not load extension settings', 'error');
+      if (elements.currentSite) elements.currentSite.textContent = 'Unavailable';
+      setSpeedControlsEnabled(false);
+    }
   }
 
   async function loadActiveSite() {
     currentHostname = null;
+    currentTabId = null;
+    if (elements.currentSite) elements.currentSite.textContent = 'Unsupported page';
+    if (elements.currentSpeed) elements.currentSpeed.textContent = '—';
+    setSiteMessage('Open a page with an HTML5 video to use quick speed controls.');
+    setSpeedControlsEnabled(false);
 
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      const url = tabs[0]?.url;
+      const activeTab = tabs[0];
+      const url = activeTab?.url;
       if (!url) return;
 
       const parsed = new URL(url);
       if (!['http:', 'https:'].includes(parsed.protocol)) return;
 
       currentHostname = parsed.hostname;
+      currentTabId = activeTab.id;
+      if (elements.currentSite) elements.currentSite.textContent = currentHostname;
+      await loadActiveMediaState();
     } catch (e) {
       // Ignore invalid URLs (chrome://, about:blank, etc.)
     }
+  }
+
+  async function loadActiveMediaState() {
+    if (!currentTabId) return;
+    try {
+      const state = await chrome.tabs.sendMessage(currentTabId, { type: 'getActiveState' });
+      if (!state?.found) {
+        setSiteMessage('No controllable video found on this page.');
+        return;
+      }
+      setSpeedControlsEnabled(true);
+      setCurrentSpeed(state.speed);
+      setSiteMessage(state.paused ? 'Video found — choose a speed.' : 'Controlling the active video.');
+    } catch {
+      setSiteMessage('Reload this page once after installing the extension.');
+    }
+  }
+
+  function setCurrentSpeed(speed) {
+    const normalized = VSCSettings.normalizeSpeed(speed);
+    if (elements.currentSpeed) elements.currentSpeed.textContent = `${normalized.toFixed(2)}x`;
+    elements.speedPresetsBar?.querySelectorAll('.speed-preset-btn').forEach(button => {
+      button.classList.toggle('active', Number(button.dataset.speed) === normalized);
+    });
+  }
+
+  function setSpeedControlsEnabled(enabled) {
+    elements.speedPresetsBar?.querySelectorAll('.speed-preset-btn').forEach(button => {
+      button.disabled = !enabled;
+    });
+  }
+
+  function setSiteMessage(message, type = '') {
+    if (!elements.siteMessage) return;
+    elements.siteMessage.textContent = message;
+    elements.siteMessage.classList.toggle('error', type === 'error');
+  }
+
+  function applyAccessibilityLabels() {
+    document.querySelectorAll('.setting-item').forEach(item => {
+      const name = item.querySelector('.setting-name')?.textContent?.trim();
+      const control = item.querySelector('input, select, button');
+      if (name && control && !control.hasAttribute('aria-label')) control.setAttribute('aria-label', name);
+    });
   }
 
   // Apply settings to UI elements
@@ -213,16 +279,25 @@
   async function updateSyncStatus() {
     if (!elements.syncStatus || !elements.syncTime) return;
 
-    const response = await chrome.runtime.sendMessage({ type: 'getSyncStatus' });
-    
-    if (response.lastSyncTime) {
-      const date = new Date(response.lastSyncTime);
-      const timeAgo = getTimeAgo(date);
-      elements.syncTime.textContent = timeAgo;
-      elements.syncStatus.classList.add('synced');
-    } else {
-      elements.syncTime.textContent = 'Not synced';
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'getSyncStatus' });
+      elements.syncStatus.classList.remove('synced');
+      if (response.lastSyncTime) {
+        const date = new Date(response.lastSyncTime);
+        elements.syncTime.textContent = `Saved ${getTimeAgo(date).toLowerCase()}`;
+        elements.syncStatus.classList.add('synced');
+      } else {
+        elements.syncTime.textContent = 'Using browser storage';
+      }
+    } catch {
+      elements.syncTime.textContent = 'Sync status unavailable';
     }
+  }
+
+  function setSaveState(label, successful = false) {
+    if (!elements.syncStatus || !elements.syncTime) return;
+    elements.syncTime.textContent = label;
+    elements.syncStatus.classList.toggle('synced', successful);
   }
 
   // Get human-readable time ago string
@@ -258,17 +333,17 @@
     const shortcuts = settings.shortcuts || [];
     elements.shortcutsList.innerHTML = shortcuts.map((shortcut, index) => `
       <div class="shortcut-item" data-index="${index}">
-        <span class="shortcut-action">${ACTION_LABELS[shortcut.action] || shortcut.action}</span>
+        <span class="shortcut-action">${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}</span>
         <div class="shortcut-key">
-          <input type="text" class="key-input" data-field="key" value="${shortcut.key}" readonly>
+          <input type="text" class="key-input" data-field="key" value="${escapeHtml(shortcut.key)}" aria-label="Key for ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}" readonly>
         </div>
         ${VALUE_UNITS[shortcut.action] ? `
           <div class="shortcut-value">
-            <input type="number" class="value-input" data-field="value" value="${shortcut.value || ''}" step="0.1" min="0.1">
+            <input type="number" class="value-input" data-field="value" value="${shortcut.value || ''}" step="0.1" min="0.1" aria-label="Value for ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}">
           </div>
         ` : '<div class="shortcut-value"></div>'}
         <label class="toggle-switch shortcut-toggle">
-          <input type="checkbox" data-field="enabled" ${shortcut.enabled !== false ? 'checked' : ''}>
+          <input type="checkbox" data-field="enabled" aria-label="Enable ${escapeHtml(ACTION_LABELS[shortcut.action] || shortcut.action)}" ${shortcut.enabled !== false ? 'checked' : ''}>
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -281,7 +356,7 @@
     elements.blacklistList.innerHTML = blacklist.map((pattern, index) => `
       <div class="blacklist-item" data-index="${index}">
         <span>${escapeHtml(pattern)}</span>
-        <button class="blacklist-remove" data-index="${index}">&times;</button>
+        <button class="blacklist-remove" data-index="${index}" aria-label="Remove ${escapeHtml(pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -293,7 +368,7 @@
     elements.whitelistList.innerHTML = whitelist.map((pattern, index) => `
       <div class="blacklist-item" data-index="${index}">
         <span>${escapeHtml(pattern)}</span>
-        <button class="blacklist-remove" data-index="${index}">&times;</button>
+        <button class="blacklist-remove" data-index="${index}" aria-label="Remove ${escapeHtml(pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -320,7 +395,7 @@
           <span class="url-rule-item-pattern">${escapeHtml(rule.pattern)}</span>
           <span class="url-rule-item-speed">${rule.speed}x</span>
         </div>
-        <button class="url-rule-remove" data-index="${index}">&times;</button>
+        <button class="url-rule-remove" data-index="${index}" aria-label="Remove URL rule ${escapeHtml(rule.pattern)}">&times;</button>
       </div>
     `).join('');
   }
@@ -339,7 +414,7 @@
             <span class="intro-outro-rule-outro">${rule.outro}s</span>
           </div>
         </div>
-        <button class="intro-outro-rule-remove" data-index="${index}">&times;</button>
+        <button class="intro-outro-rule-remove" data-index="${index}" aria-label="Remove intro and outro rule for ${escapeHtml(rule.site)}">&times;</button>
       </div>
     `).join('');
   }
@@ -416,18 +491,17 @@
       const btn = e.target.closest('.speed-preset-btn');
       if (!btn) return;
 
-      const speed = parseFloat(btn.dataset.speed);
+      const speed = VSCSettings.normalizeSpeed(btn.dataset.speed);
+      if (!currentTabId) return;
 
-      // Send speed to active tab
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: 'setSpeed', speed });
+      try {
+        const response = await chrome.tabs.sendMessage(currentTabId, { type: 'setSpeed', speed });
+        if (!response?.success) throw new Error(response?.error || 'No active video');
+        setCurrentSpeed(response.speed);
+        setSiteMessage('Speed updated.');
+      } catch {
+        setSiteMessage('Could not control a video on this page.', 'error');
       }
-
-      // Update button states
-      elements.speedPresetsBar.querySelectorAll('.speed-preset-btn').forEach(b => {
-        b.classList.toggle('active', parseFloat(b.dataset.speed) === speed);
-      });
     });
 
     // Shortcuts list events (delegated)
@@ -628,6 +702,11 @@
 
   // Handle global keydown for recording
   function handleGlobalKeydown(e) {
+    if (e.key === 'Escape' && !elements.feedbackModal?.classList.contains('hidden')) {
+      closeFeedbackModal();
+      return;
+    }
+
     // Handle intro/outro key recording
     if (recordingKeyInput) {
       e.preventDefault();
@@ -831,17 +910,22 @@
 
   // Export settings
   async function exportSettings() {
-    const data = await chrome.runtime.sendMessage({ type: 'exportSettings' });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    try {
+      const data = await chrome.runtime.sendMessage({ type: 'exportSettings' });
+      if (data?.error) throw new Error(data.error);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'video-speed-controller-settings.json';
-    a.click();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'video-speed-controller-settings.json';
+      a.click();
 
-    URL.revokeObjectURL(url);
-    showNotification('Settings exported', 'success');
+      URL.revokeObjectURL(url);
+      showNotification('Settings exported', 'success');
+    } catch {
+      showNotification('Could not export settings', 'error');
+    }
   }
 
   // Import settings
@@ -853,14 +937,16 @@
       const text = await file.text();
       const data = JSON.parse(text);
 
-      // Validate imported data
-      if (typeof data !== 'object' || !data.shortcuts) {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new Error('Invalid settings file');
       }
 
+      await saveQueue;
       const merged = { ...settings, ...data };
-      await chrome.runtime.sendMessage({ type: 'importSettings', settings: merged });
-      settings = merged;
+      const response = await chrome.runtime.sendMessage({ type: 'importSettings', settings: merged });
+      if (!response?.success) throw new Error(response?.error || 'Import failed');
+      persistedSettings = VSCSettings.normalizeSettings(response.settings);
+      settings = { ...persistedSettings, timeSaved: Number(response.settings?.timeSaved) || 0 };
       await loadActiveSite();
       applySettingsToUI();
       showNotification('Settings imported', 'success');
@@ -876,19 +962,50 @@
   async function resetSettings() {
     if (!confirm('Reset all settings to defaults?')) return;
 
-    const response = await chrome.runtime.sendMessage({ type: 'resetSettings' });
-    settings = response.settings;
-    await loadActiveSite();
-    applySettingsToUI();
-    showNotification('Settings reset to defaults', 'success');
+    try {
+      await saveQueue;
+      const response = await chrome.runtime.sendMessage({ type: 'resetSettings' });
+      if (!response?.success) throw new Error(response?.error || 'Reset failed');
+      persistedSettings = VSCSettings.normalizeSettings(response.settings);
+      settings = { ...persistedSettings, timeSaved: 0 };
+      await loadActiveSite();
+      applySettingsToUI();
+      showNotification('Settings reset to defaults', 'success');
+    } catch {
+      showNotification('Could not reset settings', 'error');
+    }
   }
 
   // Save settings to storage
-  async function saveSettings() {
-    await chrome.runtime.sendMessage({ type: 'saveSettings', settings });
-    // Update sync time
-    await chrome.runtime.sendMessage({ type: 'updateSyncTime' });
-    updateSyncStatus();
+  function saveSettings() {
+    const operation = saveQueue.then(async () => {
+      const requestSnapshot = VSCSettings.normalizeSettings(settings);
+      const updates = VSCSettings.diffSettings(persistedSettings, requestSnapshot);
+      if (Object.keys(updates).length === 0) return;
+
+      setSaveState('Saving…');
+      const response = await chrome.runtime.sendMessage({ type: 'updateSettings', updates });
+      if (!response?.success) throw new Error(response?.error || 'Save failed');
+
+      const serverSettings = VSCSettings.normalizeSettings(response.settings || {
+        ...persistedSettings,
+        ...updates,
+        lastSyncTime: response.lastSyncTime
+      });
+      const locallyChangedAfterRequest = VSCSettings.diffSettings(requestSnapshot, settings);
+      for (const [key, value] of Object.entries(serverSettings)) {
+        if (!Object.prototype.hasOwnProperty.call(locallyChangedAfterRequest, key)) settings[key] = value;
+      }
+      persistedSettings = serverSettings;
+      setSaveState('Saved just now', true);
+    });
+
+    saveQueue = operation.catch(error => {
+      console.error('Video Speed Pro: Settings save failed', error);
+      setSaveState('Save failed');
+      showNotification('Settings could not be saved', 'error');
+    });
+    return saveQueue;
   }
 
   // Show notification
@@ -916,6 +1033,8 @@
   // Open feedback modal
   async function openFeedbackModal() {
     if (!elements.feedbackModal) return;
+
+    lastFocusedElement = document.activeElement;
 
     // Get system info
     const manifest = chrome.runtime.getManifest();
@@ -954,6 +1073,8 @@
   function closeFeedbackModal() {
     if (!elements.feedbackModal) return;
     elements.feedbackModal.classList.add('hidden');
+    lastFocusedElement?.focus?.();
+    lastFocusedElement = null;
   }
 
   // Get browser info

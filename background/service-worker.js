@@ -1,36 +1,76 @@
 // Service Worker for Video Speed Controller Pro Extension
 
-// Batched storage writes for better performance
-let pendingWrites = {};
-let writeTimer = null;
-const WRITE_BATCH_DELAY = 300; // ms
+importScripts('../shared/settings.js');
 
-let pendingLocalWrites = {};
-let localWriteTimer = null;
-const LOCAL_WRITE_BATCH_DELAY = 500; // ms
+const {
+  checkSiteAccess: resolveSiteAccess,
+  createDefaultSettings,
+  findUrlRule,
+  normalizeSettings,
+  normalizeSpeed,
+  sanitizeSettingsPatch
+} = VSCSettings;
 
+const COLLECTION_WRITE_DELAY = 300;
+let pendingCollectionWrites = new Map();
+let collectionWriteTimer = null;
+let collectionWriteQueue = Promise.resolve();
+let timeSavedWriteQueue = Promise.resolve();
 let timeSavedCache = null;
 
-function batchedStorageSet(updates) {
-  Object.assign(pendingWrites, updates);
-  clearTimeout(writeTimer);
-  writeTimer = setTimeout(async () => {
-    if (Object.keys(pendingWrites).length > 0) {
-      await chrome.storage.sync.set(pendingWrites);
-      pendingWrites = {};
-    }
-  }, WRITE_BATCH_DELAY);
+function normalizeEntryKey(value, label = 'hostname') {
+  if (typeof value !== 'string') throw new Error(`Invalid ${label}`);
+  const key = value.trim().slice(0, 512);
+  if (!key) throw new Error(`Invalid ${label}`);
+  return key;
 }
 
-function batchedLocalSet(updates) {
-  Object.assign(pendingLocalWrites, updates);
-  clearTimeout(localWriteTimer);
-  localWriteTimer = setTimeout(async () => {
-    if (Object.keys(pendingLocalWrites).length > 0) {
-      await chrome.storage.local.set(pendingLocalWrites);
-      pendingLocalWrites = {};
+function queueCollectionWrite(collection, entryKey, value) {
+  return new Promise((resolve, reject) => {
+    const pending = pendingCollectionWrites.get(collection) || { entries: new Map(), waiters: [] };
+    pending.entries.set(entryKey, value);
+    pending.waiters.push({ resolve, reject });
+    pendingCollectionWrites.set(collection, pending);
+
+    if (!collectionWriteTimer) {
+      collectionWriteTimer = setTimeout(flushCollectionWrites, COLLECTION_WRITE_DELAY);
     }
-  }, LOCAL_WRITE_BATCH_DELAY);
+  });
+}
+
+function flushCollectionWrites() {
+  if (collectionWriteTimer) clearTimeout(collectionWriteTimer);
+  collectionWriteTimer = null;
+
+  if (pendingCollectionWrites.size === 0) return collectionWriteQueue;
+
+  const batch = pendingCollectionWrites;
+  pendingCollectionWrites = new Map();
+
+  const operation = collectionWriteQueue.then(async () => {
+    const collections = [...batch.keys()];
+    const current = await chrome.storage.sync.get(collections);
+    const updates = {};
+
+    for (const [collection, pending] of batch) {
+      const next = { ...(current[collection] || {}) };
+      for (const [entryKey, value] of pending.entries) {
+        if (value === null || value === undefined) delete next[entryKey];
+        else next[entryKey] = value;
+      }
+      updates[collection] = sanitizeSettingsPatch({ [collection]: next })[collection] || {};
+    }
+
+    await chrome.storage.sync.set(updates);
+    for (const pending of batch.values()) pending.waiters.forEach(waiter => waiter.resolve(updates));
+    return updates;
+  }).catch(error => {
+    for (const pending of batch.values()) pending.waiters.forEach(waiter => waiter.reject(error));
+    throw error;
+  });
+
+  collectionWriteQueue = operation.catch(() => {});
+  return operation;
 }
 
 async function getTimeSavedValue() {
@@ -41,98 +81,47 @@ async function getTimeSavedValue() {
   return timeSavedCache;
 }
 
-function setTimeSavedValue(value) {
-  timeSavedCache = value;
-  batchedLocalSet({ timeSaved: value });
-  return value;
+function addTimeSaved(seconds) {
+  const safeSeconds = Math.min(3600, Math.max(0, Number(seconds) || 0));
+  const operation = timeSavedWriteQueue.then(async () => {
+    const currentValue = await getTimeSavedValue();
+    const nextValue = currentValue + safeSeconds;
+    await chrome.storage.local.set({ timeSaved: nextValue });
+    timeSavedCache = nextValue;
+    return nextValue;
+  });
+  timeSavedWriteQueue = operation.catch(() => {});
+  return operation;
 }
 
-// Immediate write for critical settings (bypass batching)
-async function immediateStorageSet(updates) {
-  // Flush any pending writes first
-  if (Object.keys(pendingWrites).length > 0) {
-    clearTimeout(writeTimer);
-    Object.assign(pendingWrites, updates);
-    await chrome.storage.sync.set(pendingWrites);
-    pendingWrites = {};
-  } else {
-    await chrome.storage.sync.set(updates);
-  }
+async function notifyTabs(settings) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(tabs.map(tab =>
+    chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings })
+  ));
 }
-
-const DEFAULT_SETTINGS = {
-  enabled: true,
-  hideByDefault: false,
-  rememberSpeed: true,
-  forceSpeed: false,
-  workOnAudio: false,
-  preservePitch: true,
-  opacity: 0.8,
-  autoHideDelay: 0,
-  controllerMode: 'minimal',
-  showPipIndicator: true,
-  // Site access control
-  siteAccessMode: 'blacklist', // 'all' | 'blacklist' | 'whitelist'
-  whitelist: [],
-  shortcuts: [
-    { action: 'show-controller', key: 'V', modifiers: [], enabled: true },
-    { action: 'decrease-speed', key: 'S', modifiers: [], value: 0.1, enabled: true },
-    { action: 'increase-speed', key: 'D', modifiers: [], value: 0.1, enabled: true },
-    { action: 'rewind', key: 'Z', modifiers: [], value: 10, enabled: true },
-    { action: 'advance', key: 'X', modifiers: [], value: 10, enabled: true },
-    { action: 'reset-speed', key: 'R', modifiers: [], value: 1.0, enabled: true },
-    { action: 'preferred-speed', key: 'G', modifiers: [], value: 3.0, enabled: true },
-    { action: 'frame-forward', key: '.', modifiers: [], enabled: true },
-    { action: 'frame-backward', key: ',', modifiers: [], enabled: true },
-    { action: 'screenshot', key: 'P', modifiers: [], enabled: true },
-    { action: 'set-loop-a', key: '[', modifiers: [], enabled: true },
-    { action: 'set-loop-b', key: ']', modifiers: [], enabled: true },
-    { action: 'clear-loop', key: '\\', modifiers: [], enabled: true }
-  ],
-  blacklist: [],
-  savedSpeeds: {},
-  // Per-site pinned speed (takes priority over savedSpeeds)
-  sitePresetSpeeds: {},
-  urlRules: [],
-  lastSyncTime: null,
-  // Intro/Outro Skip settings
-  introOutroEnabled: false,
-  defaultIntroSkip: 0,
-  defaultOutroSkip: 0,
-  autoSkipIntro: false,
-  skipIntroKey: 'I',
-  skipOutroKey: 'O',
-  introOutroSiteRules: [],
-  // Video Filters
-  rememberFilters: false,
-  savedFilters: {},
-  // Volume Boost
-  rememberVolumeBoost: false,
-  savedVolumeBoost: {}
-};
 
 // Initialize default settings on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
-    await chrome.storage.sync.set(DEFAULT_SETTINGS);
+    await chrome.storage.sync.set(createDefaultSettings());
     await chrome.storage.local.set({ timeSaved: 0 });
     timeSavedCache = 0;
     console.log('Video Speed Pro: Default settings initialized');
   } else if (details.reason === 'update') {
     // Merge new default settings with existing ones
-    const existing = await chrome.storage.sync.get(null);
+    const [existing, existingLocal] = await Promise.all([
+      chrome.storage.sync.get(null),
+      chrome.storage.local.get(['timeSaved'])
+    ]);
     const existingTimeSaved = typeof existing.timeSaved === 'number' ? existing.timeSaved : null;
-    const merged = { ...DEFAULT_SETTINGS, ...existing };
-    delete merged.timeSaved;
+    const localTimeSaved = typeof existingLocal.timeSaved === 'number' ? existingLocal.timeSaved : null;
+    const migratedTimeSaved = existingTimeSaved ?? localTimeSaved ?? 0;
+    const merged = normalizeSettings(existing);
     await chrome.storage.sync.set(merged);
     await chrome.storage.sync.remove('timeSaved');
-    if (existingTimeSaved !== null) {
-      await chrome.storage.local.set({ timeSaved: existingTimeSaved });
-      timeSavedCache = existingTimeSaved;
-    } else {
-      await chrome.storage.local.set({ timeSaved: 0 });
-      timeSavedCache = 0;
-    }
+    await chrome.storage.local.set({ timeSaved: migratedTimeSaved });
+    timeSavedCache = migratedTimeSaved;
     console.log('Video Speed Pro: Settings migrated');
   }
 });
@@ -141,13 +130,18 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.commands.onCommand.addListener(async (command) => {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs[0]) {
-    chrome.tabs.sendMessage(tabs[0].id, { type: 'command', command });
+    await chrome.tabs.sendMessage(tabs[0].id, { type: 'command', command }).catch(() => {});
   }
 });
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  handleMessage(message, sender)
+    .then(sendResponse)
+    .catch(error => {
+      console.error('Video Speed Pro: Message failed', message?.type, error);
+      sendResponse({ success: false, error: error?.message || 'Unexpected extension error' });
+    });
   return true; // Keep channel open for async response
 });
 
@@ -160,63 +154,54 @@ async function handleMessage(message, sender) {
       ]);
       const timeSaved = typeof localSettings.timeSaved === 'number' ? localSettings.timeSaved : 0;
       timeSavedCache = timeSaved;
-      return { ...syncSettings, timeSaved };
+      return { ...normalizeSettings(syncSettings), timeSaved };
     }
 
-    case 'saveSettings': {
-      const { timeSaved: _timeSaved, ...syncSettings } = message.settings || {};
-      await chrome.storage.sync.set(syncSettings);
-      // Notify all tabs about settings update
-      const tabs = await chrome.tabs.query({});
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings: message.settings }).catch(() => {});
-      });
-      return { success: true };
+    case 'saveSettings':
+    case 'updateSettings': {
+      const requested = message.type === 'updateSettings' ? message.updates : message.settings;
+      const updates = sanitizeSettingsPatch(requested);
+      delete updates.timeSaved;
+      const lastSyncTime = Date.now();
+      await chrome.storage.sync.set({ ...updates, lastSyncTime });
+      const current = normalizeSettings(await chrome.storage.sync.get(null));
+      await notifyTabs(current);
+      return { success: true, settings: current, lastSyncTime };
     }
 
     case 'getSavedSpeed': {
       const settings = await chrome.storage.sync.get(['savedSpeeds', 'rememberSpeed']);
-      if (settings.rememberSpeed && settings.savedSpeeds) {
-        return { speed: settings.savedSpeeds[message.hostname] || null };
+      const savedSpeeds = sanitizeSettingsPatch({ savedSpeeds: settings.savedSpeeds }).savedSpeeds || {};
+      if (settings.rememberSpeed && savedSpeeds) {
+        return { speed: savedSpeeds[message.hostname] ?? null };
       }
       return { speed: null };
     }
 
     case 'saveSpeed': {
-      const current = await chrome.storage.sync.get(['savedSpeeds']);
-      const savedSpeeds = current.savedSpeeds || {};
-      savedSpeeds[message.hostname] = message.speed;
-      // Use batched write for frequent speed saves
-      batchedStorageSet({ savedSpeeds });
+      const hostname = normalizeEntryKey(message.hostname);
+      const speed = normalizeSpeed(message.speed);
+      await queueCollectionWrite('savedSpeeds', hostname, speed);
       return { success: true };
     }
 
     case 'setSitePresetSpeed': {
-      const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
-      const sitePresetSpeeds = data.sitePresetSpeeds || {};
-      if (message.speed == null) {
-        delete sitePresetSpeeds[message.hostname];
-      } else {
-        sitePresetSpeeds[message.hostname] = message.speed;
-      }
-      await chrome.storage.sync.set({ sitePresetSpeeds });
+      const hostname = normalizeEntryKey(message.hostname);
+      const speed = message.speed == null ? null : normalizeSpeed(message.speed);
+      await queueCollectionWrite('sitePresetSpeeds', hostname, speed);
       return { success: true };
     }
 
     case 'getSitePresetSpeed': {
       const data = await chrome.storage.sync.get(['sitePresetSpeeds']);
-      const sitePresetSpeeds = data.sitePresetSpeeds || {};
+      const sitePresetSpeeds = sanitizeSettingsPatch({ sitePresetSpeeds: data.sitePresetSpeeds }).sitePresetSpeeds || {};
       return { speed: sitePresetSpeeds[message.hostname] ?? null };
     }
 
     case 'setPreservePitch': {
-      const existing = await chrome.storage.sync.get(null);
-      const updated = { ...existing, preservePitch: !!message.preservePitch };
-      await chrome.storage.sync.set({ preservePitch: updated.preservePitch });
-      const tabs = await chrome.tabs.query({});
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, { type: 'settingsUpdated', settings: updated }).catch(() => {});
-      });
+      await chrome.storage.sync.set({ preservePitch: message.preservePitch === true });
+      const updated = normalizeSettings(await chrome.storage.sync.get(null));
+      await notifyTabs(updated);
       return { success: true };
     }
 
@@ -233,34 +218,40 @@ async function handleMessage(message, sender) {
         chrome.storage.local.get(['timeSaved'])
       ]);
       return {
-        ...exportSync,
+        ...normalizeSettings(exportSync),
         timeSaved: typeof exportLocal.timeSaved === 'number' ? exportLocal.timeSaved : 0
       };
     }
 
     case 'importSettings': {
-      const { timeSaved: importedTimeSaved, ...importSync } = message.settings || {};
+      await flushCollectionWrites();
+      const rawTimeSaved = Number(message.settings?.timeSaved);
+      const importedTimeSaved = Number.isFinite(rawTimeSaved)
+        ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, rawTimeSaved))
+        : 0;
+      const importSync = normalizeSettings(message.settings);
+      importSync.lastSyncTime = Date.now();
+      await chrome.storage.sync.clear();
       await chrome.storage.sync.set(importSync);
-      if (typeof importedTimeSaved === 'number') {
-        await chrome.storage.local.set({ timeSaved: importedTimeSaved });
-        timeSavedCache = importedTimeSaved;
-      }
-      return { success: true };
+      await chrome.storage.local.set({ timeSaved: importedTimeSaved });
+      timeSavedCache = importedTimeSaved;
+      await notifyTabs(importSync);
+      return { success: true, settings: { ...importSync, timeSaved: importedTimeSaved } };
     }
 
     case 'resetSettings': {
+      await flushCollectionWrites();
+      const defaults = createDefaultSettings();
       await chrome.storage.sync.clear();
-      await chrome.storage.sync.set(DEFAULT_SETTINGS);
+      await chrome.storage.sync.set(defaults);
       await chrome.storage.local.set({ timeSaved: 0 });
       timeSavedCache = 0;
-      return { success: true, settings: DEFAULT_SETTINGS };
+      await notifyTabs(defaults);
+      return { success: true, settings: { ...defaults, timeSaved: 0 } };
     }
 
     case 'addTimeSaved': {
-      const currentTimeSaved = await getTimeSavedValue();
-      const newTimeSaved = currentTimeSaved + message.seconds;
-      // Use batched local write for frequent time tracking updates
-      setTimeSavedValue(newTimeSaved);
+      const newTimeSaved = await addTimeSaved(message.seconds);
       return { success: true, timeSaved: newTimeSaved };
     }
 
@@ -277,29 +268,11 @@ async function handleMessage(message, sender) {
 
     case 'getUrlRuleSpeed': {
       const ruleSettings = await chrome.storage.sync.get(['urlRules']);
-      const urlRules = ruleSettings.urlRules || [];
-      const url = message.url;
-
-      // Find matching rule (first match wins)
-      for (const rule of urlRules) {
-        try {
-          // Try as regex first
-          const regex = new RegExp(rule.pattern, 'i');
-          if (regex.test(url)) {
-            return { speed: rule.speed, matched: true, pattern: rule.pattern };
-          }
-        } catch {
-          // Fall back to simple string match
-          if (url.includes(rule.pattern)) {
-            return { speed: rule.speed, matched: true, pattern: rule.pattern };
-          }
-        }
-      }
-      return { speed: null, matched: false };
+      return findUrlRule(message.url, ruleSettings.urlRules || []);
     }
 
     case 'getIntroOutroSettings': {
-      const introOutroData = await chrome.storage.sync.get([
+      const introOutroData = normalizeSettings(await chrome.storage.sync.get([
         'introOutroEnabled',
         'defaultIntroSkip',
         'defaultOutroSkip',
@@ -307,7 +280,7 @@ async function handleMessage(message, sender) {
         'skipIntroKey',
         'skipOutroKey',
         'introOutroSiteRules'
-      ]);
+      ]));
 
       // Check if feature is enabled
       if (!introOutroData.introOutroEnabled) {
@@ -348,36 +321,36 @@ async function handleMessage(message, sender) {
 
     // Video Filters
     case 'saveFilters': {
-      const filterData = await chrome.storage.sync.get(['savedFilters']);
-      const savedFilters = filterData.savedFilters || {};
-      savedFilters[message.hostname] = message.filters;
-      // Use batched write for frequent filter adjustments
-      batchedStorageSet({ savedFilters });
+      const hostname = normalizeEntryKey(message.hostname);
+      const safeFilters = sanitizeSettingsPatch({ savedFilters: { [hostname]: message.filters } }).savedFilters;
+      if (!safeFilters?.[hostname]) throw new Error('Invalid filters');
+      await queueCollectionWrite('savedFilters', hostname, safeFilters[hostname]);
       return { success: true };
     }
 
     case 'getSavedFilters': {
       const filterData = await chrome.storage.sync.get(['savedFilters', 'rememberFilters']);
-      if (filterData.rememberFilters && filterData.savedFilters) {
-        return { filters: filterData.savedFilters[message.hostname] || null };
+      const savedFilters = sanitizeSettingsPatch({ savedFilters: filterData.savedFilters }).savedFilters || {};
+      if (filterData.rememberFilters && savedFilters) {
+        return { filters: savedFilters[message.hostname] || null };
       }
       return { filters: null };
     }
 
     // Volume Boost
     case 'saveVolumeBoost': {
-      const volumeData = await chrome.storage.sync.get(['savedVolumeBoost']);
-      const savedVolumeBoost = volumeData.savedVolumeBoost || {};
-      savedVolumeBoost[message.hostname] = message.level;
-      // Use batched write for frequent volume adjustments
-      batchedStorageSet({ savedVolumeBoost });
+      const hostname = normalizeEntryKey(message.hostname);
+      const safeLevels = sanitizeSettingsPatch({ savedVolumeBoost: { [hostname]: message.level } }).savedVolumeBoost;
+      if (!safeLevels?.[hostname]) throw new Error('Invalid volume boost');
+      await queueCollectionWrite('savedVolumeBoost', hostname, safeLevels[hostname]);
       return { success: true };
     }
 
     case 'getSavedVolumeBoost': {
       const volumeData = await chrome.storage.sync.get(['savedVolumeBoost', 'rememberVolumeBoost']);
-      if (volumeData.rememberVolumeBoost && volumeData.savedVolumeBoost) {
-        return { level: volumeData.savedVolumeBoost[message.hostname] || null };
+      const savedVolumeBoost = sanitizeSettingsPatch({ savedVolumeBoost: volumeData.savedVolumeBoost }).savedVolumeBoost || {};
+      if (volumeData.rememberVolumeBoost && savedVolumeBoost) {
+        return { level: savedVolumeBoost[message.hostname] || null };
       }
       return { level: null };
     }
@@ -387,51 +360,7 @@ async function handleMessage(message, sender) {
   }
 }
 
-function matchPattern(url, pattern) {
-  if (!pattern) return false;
-  try {
-    const regex = new RegExp(pattern, 'i');
-    return regex.test(url);
-  } catch {
-    return url.toLowerCase().includes(String(pattern).toLowerCase());
-  }
-}
-
 async function checkSiteAccess(url) {
   const config = await chrome.storage.sync.get(['enabled', 'siteAccessMode', 'blacklist', 'whitelist']);
-  
-  // If 'enabled' is undefined (settings not initialized), treat as enabled
-  // This handles fresh installs or cases where onInstalled didn't complete
-  if (config.enabled === false) {
-    return { blocked: true, reason: 'disabled' };
-  }
-
-  const mode = config.siteAccessMode || 'blacklist';
-  if (mode === 'all') {
-    return { blocked: false, reason: null };
-  }
-
-  const blacklist = config.blacklist || [];
-  const whitelist = config.whitelist || [];
-
-  if (mode === 'whitelist') {
-    // If whitelist is empty, don't block (avoids accidentally blocking everything)
-    if (whitelist.length === 0) {
-      return { blocked: false, reason: null };
-    }
-    const allowed = whitelist.some(p => matchPattern(url, p));
-    return { blocked: !allowed, reason: allowed ? null : 'not_whitelisted' };
-  }
-
-  // blacklist mode (default)
-  const blocked = blacklist.some(p => matchPattern(url, p));
-  return { blocked, reason: blocked ? 'blacklisted' : null };
+  return resolveSiteAccess(url, config);
 }
-
-// Listen for tab updates to inject content script if needed
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    // Content script is auto-injected via manifest, but we can send initial settings
-    chrome.tabs.sendMessage(tabId, { type: 'tabReady' }).catch(() => {});
-  }
-});

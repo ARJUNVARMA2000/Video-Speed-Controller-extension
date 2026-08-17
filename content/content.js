@@ -13,6 +13,16 @@
   let activeElement = null;
   let isBlocked = false;
   let contextInvalidated = false;
+  let extensionActive = false;
+  let domObserver = null;
+  let interactionListenersBound = false;
+  let urlTrackingStarted = false;
+  let urlCheckInterval = null;
+
+  const DEBUG = false;
+  function debug(...args) {
+    if (DEBUG) console.debug(...args);
+  }
 
   // Long-press state
   let longPressActive = false;
@@ -70,59 +80,51 @@
     if (contextInvalidated) return;
     contextInvalidated = true;
 
-    console.log('Video Speed Pro: Extension context invalidated, cleaning up');
+    debug('Video Speed Pro: Extension context invalidated, cleaning up');
 
-    // Stop time tracking
-    if (timeTrackingInterval) {
-      cancelAnimationFrame(timeTrackingInterval);
-      timeTrackingInterval = null;
-    }
+    stopTimeTracking();
+    if (domObserver) domObserver.disconnect();
+    if (urlCheckInterval) clearInterval(urlCheckInterval);
 
     // Clear auto-hide timers
     autoHideTimers.forEach(timer => clearTimeout(timer));
     autoHideTimers.clear();
 
-    // Remove all controllers from the page
-    mediaElements.forEach((controller, media) => {
-      if (controller && controller.parentNode) {
-        controller.remove();
-      }
-    });
-    mediaElements.clear();
-    audioContextMap.forEach((_nodes, media) => {
-      cleanupVolumeBoostForMedia(media);
-    });
+    // Remove all controllers and media-bound listeners from the page.
+    [...mediaElements.keys()].forEach(detachController);
     audioContextMap.clear();
+    if (dragListenersBound) {
+      document.removeEventListener('mousemove', handleDragMove);
+      document.removeEventListener('mouseup', handleDragEnd);
+      dragListenersBound = false;
+    }
 
     // Reset state
     activeElement = null;
+    extensionActive = false;
     window.vscInitialized = false;
   }
 
   // Initialize
   async function init() {
-    console.log('Video Speed Pro: Starting initialization...');
-    
+    debug('Video Speed Pro: Starting initialization...');
+
     // Check if extension context is valid
     if (!isContextValid()) {
-      console.log('Video Speed Pro: Extension context not available');
+      debug('Video Speed Pro: Extension context not available');
       return;
     }
 
-    // Check if site is blocked
-    const blockCheck = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
-    if (blockCheck && blockCheck.blocked) {
-      isBlocked = true;
-      console.log('Video Speed Pro: Disabled on this site -', blockCheck.reason || 'unknown reason');
+    try {
+      chrome.runtime.onMessage.addListener(handleMessage);
+    } catch (e) {
+      if (e.message?.includes('Extension context invalidated')) handleContextInvalidated();
       return;
     }
 
-    // Load settings
     settings = await sendMessage({ type: 'getSettings' });
-    
-    // If settings failed to load (empty response), use defaults
     if (!settings || Object.keys(settings).length === 0) {
-      console.warn('Video Speed Pro: Failed to load settings, using defaults');
+      console.warn('Video Speed Pro: Failed to load settings, using safe defaults');
       settings = {
         enabled: true,
         hideByDefault: false,
@@ -135,15 +137,27 @@
         shortcuts: []
       };
     }
-    
-    if (settings.preservePitch === undefined) {
-      settings.preservePitch = true;
-    }
-    if (settings.enabled === false) {  // Explicitly check for false, not falsy
+
+    setupKeyboardListener();
+    setupContextMenu();
+    startUrlChangeDetection();
+
+    // Check if site is blocked
+    const blockCheck = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
+    if (settings.enabled === false || blockCheck?.blocked) {
       isBlocked = true;
-      console.log('Video Speed Pro: Extension is disabled in settings');
+      debug('Video Speed Pro: Disabled on this site -', blockCheck?.reason || 'disabled');
       return;
     }
+
+    await activateExtension();
+    debug('Video Speed Pro: Initialized');
+  }
+
+  async function activateExtension() {
+    if (extensionActive || contextInvalidated) return;
+    extensionActive = true;
+    isBlocked = false;
 
     // Load intro/outro settings
     introOutroSettings = await sendMessage({
@@ -162,30 +176,20 @@
 
     // Set up mutation observer for dynamic content
     setupObserver();
+  }
 
-    // Set up keyboard listener
-    setupKeyboardListener();
-
-    // Set up context menu
-    setupContextMenu();
-
-    // Start time tracking
-    startTimeTracking();
-
-    // Start URL change detection for SPAs
-    startUrlChangeDetection();
-
-    // Listen for messages from background/popup
-    try {
-      chrome.runtime.onMessage.addListener(handleMessage);
-    } catch (e) {
-      if (e.message?.includes('Extension context invalidated')) {
-        handleContextInvalidated();
-        return;
-      }
+  function deactivateExtension() {
+    if (!extensionActive) return;
+    extensionActive = false;
+    isBlocked = true;
+    if (domObserver) {
+      domObserver.disconnect();
+      domObserver = null;
     }
-
-    console.log('Video Speed Pro: Initialized');
+    [...mediaElements.keys()].forEach(detachController);
+    stopTimeTracking();
+    removePipIndicator();
+    document.querySelector('.vsc-context-menu')?.remove();
   }
 
   // Send message to background script
@@ -227,13 +231,9 @@
 
     switch (message.type) {
       case 'settingsUpdated':
-        settings = message.settings;
-        if (settings.preservePitch === undefined) {
-          settings.preservePitch = true;
-        }
-        updateAllControllers();
-        // Reload intro/outro settings
-        reloadIntroOutroSettings();
+        handleSettingsUpdated(message.settings).catch(error => {
+          console.error('Video Speed Pro: Could not apply updated settings', error);
+        });
         break;
       case 'command':
         handleCommand(message.command);
@@ -243,12 +243,44 @@
         if (!activeElement) activeElement = findActiveMedia();
         if (activeElement) {
           setSpeed(activeElement, message.speed);
+          sendResponse?.({ success: true, speed: activeElement.playbackRate });
+        } else {
+          sendResponse?.({ success: false, error: 'No active media found' });
         }
         break;
-      case 'tabReady':
-        // Tab is ready, can send initial state if needed
+      case 'getActiveState': {
+        if (!activeElement) activeElement = findActiveMedia();
+        sendResponse?.(activeElement && !isBlocked ? {
+          found: true,
+          speed: activeElement.playbackRate,
+          paused: activeElement.paused
+        } : { found: false });
         break;
+      }
     }
+  }
+
+  async function handleSettingsUpdated(nextSettings) {
+    settings = nextSettings || settings;
+    const access = await sendMessage({ type: 'checkSiteAccess', url: window.location.href });
+    if (settings.enabled === false || access?.blocked) {
+      deactivateExtension();
+      return;
+    }
+
+    if (!extensionActive) {
+      await activateExtension();
+      return;
+    }
+
+    if (!settings.workOnAudio) {
+      [...mediaElements.keys()]
+        .filter(media => media.tagName === 'AUDIO')
+        .forEach(detachController);
+    }
+    findMediaElements();
+    updateAllControllers();
+    reloadIntroOutroSettings();
   }
 
   // Handle keyboard commands from manifest
@@ -280,7 +312,7 @@
     
     // Find in main document
     const elements = document.querySelectorAll(selector);
-    console.log(`Video Speed Pro: Found ${elements.length} media element(s) in main document`);
+    debug(`Video Speed Pro: Found ${elements.length} media element(s) in main document`);
     elements.forEach(el => attachController(el));
     
     // Also search in shadow DOMs
@@ -299,7 +331,7 @@
       if (el.shadowRoot) {
         const shadowMedia = el.shadowRoot.querySelectorAll(selector);
         if (shadowMedia.length > 0) {
-          console.log(`Video Speed Pro: Found ${shadowMedia.length} media element(s) in shadow DOM`);
+          debug(`Video Speed Pro: Found ${shadowMedia.length} media element(s) in shadow DOM`);
           shadowMedia.forEach(media => attachController(media));
         }
         // Recursively search nested shadow DOMs
@@ -331,37 +363,42 @@
         // Handle removed nodes
         for (const node of mutation.removedNodes) {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          if (isMediaElement(node)) {
+          // A DOM move emits both removal and addition records. Only detach
+          // media that actually left the document.
+          if (isMediaElement(node) && !node.isConnected) {
             detachController(node);
           }
           const selector = settings.workOnAudio ? 'video, audio' : 'video';
           const mediaInside = node.querySelectorAll?.(selector);
           if (mediaInside) {
-            mediaInside.forEach(el => detachController(el));
+            mediaInside.forEach(el => {
+              if (!el.isConnected) detachController(el);
+            });
           }
         }
       }
     };
 
-    const observer = new MutationObserver(observerCallback);
+    if (domObserver) domObserver.disconnect();
+    domObserver = new MutationObserver(observerCallback);
 
     // Observe document.body if available, otherwise wait for it
     if (document.body) {
-      observer.observe(document.body, {
+      domObserver.observe(document.body, {
         childList: true,
         subtree: true
       });
-      console.log('Video Speed Pro: MutationObserver started');
+      debug('Video Speed Pro: MutationObserver started');
     } else {
       // Wait for body to be available
       const bodyObserver = new MutationObserver(() => {
         if (document.body) {
           bodyObserver.disconnect();
-          observer.observe(document.body, {
+          domObserver.observe(document.body, {
             childList: true,
             subtree: true
           });
-          console.log('Video Speed Pro: MutationObserver started (delayed)');
+          debug('Video Speed Pro: MutationObserver started (delayed)');
           // Also search for any videos that appeared before observer was set up
           findMediaElements();
         }
@@ -383,7 +420,7 @@
 
     // Skip if media is not connected to the DOM
     if (!media.isConnected) {
-      console.log('Video Speed Pro: Skipping disconnected media element');
+      debug('Video Speed Pro: Skipping disconnected media element');
       return;
     }
 
@@ -395,7 +432,7 @@
       
       // Only skip if video is loaded (has dimensions) AND is tiny
       if (width > 0 && height > 0 && width < 100 && height < 100) {
-        console.log('Video Speed Pro: Skipping tiny video', width, 'x', height);
+        debug('Video Speed Pro: Skipping tiny video', width, 'x', height);
         return;
       }
       
@@ -403,7 +440,7 @@
       // Wait for loadedmetadata event to try again
       if (width === 0 && height === 0 && !media._vscWaitingForLoad) {
         media._vscWaitingForLoad = true;
-        console.log('Video Speed Pro: Video has no dimensions, waiting for load...');
+        debug('Video Speed Pro: Video has no dimensions, waiting for load...');
         media.addEventListener('loadedmetadata', () => {
           media._vscWaitingForLoad = false;
           attachController(media);
@@ -441,15 +478,25 @@
     applyInitialSpeed(media);
 
     // Track active element on play
-    media.addEventListener('play', () => {
+    const handlePlay = () => {
       activeElement = media;
-    });
+      startTimeTracking();
+    };
+    const handlePause = () => {
+      if (![...mediaElements.keys()].some(element => !element.paused && !element.ended)) stopTimeTracking();
+    };
 
     // Update controller when speed changes externally
-    media.addEventListener('ratechange', () => {
+    const handleRateChange = () => {
       updateControllerDisplay(media);
       updatePipIndicator();
-    });
+    };
+    media.addEventListener('play', handlePlay);
+    media.addEventListener('pause', handlePause);
+    media.addEventListener('ended', handlePause);
+    media.addEventListener('ratechange', handleRateChange);
+    media._vscCoreListeners = { handlePlay, handlePause, handleRateChange };
+    if (!media.paused && !media.ended) startTimeTracking();
 
     // Update controller position when video resizes
     if (typeof ResizeObserver !== 'undefined') {
@@ -485,13 +532,16 @@
       resetAutoHide(controller);
     }
 
-    console.log('Video Speed Pro: Attached to', media.tagName);
+    debug('Video Speed Pro: Attached to', media.tagName);
   }
 
   // Detach controller from media element
   function detachController(media) {
     const controller = mediaElements.get(media);
     if (controller) {
+      const timer = autoHideTimers.get(controller);
+      if (timer) clearTimeout(timer);
+      autoHideTimers.delete(controller);
       controller.remove();
       mediaElements.delete(media);
     }
@@ -503,7 +553,23 @@
       media._vscResizeObserver.disconnect();
       delete media._vscResizeObserver;
     }
+    if (media._vscCoreListeners) {
+      const { handlePlay, handlePause, handleRateChange } = media._vscCoreListeners;
+      media.removeEventListener('play', handlePlay);
+      media.removeEventListener('pause', handlePause);
+      media.removeEventListener('ended', handlePause);
+      media.removeEventListener('ratechange', handleRateChange);
+      delete media._vscCoreListeners;
+    }
+    cleanupIntroOutroListeners(media);
+    cleanupPipListeners(media);
+    if (media._abLoopHandler) {
+      media.removeEventListener('timeupdate', media._abLoopHandler);
+      delete media._abLoopHandler;
+    }
+    abLoopState.delete(media);
     cleanupVolumeBoostForMedia(media);
+    if (mediaElements.size === 0) stopTimeTracking();
   }
 
   // Create controller UI
@@ -545,9 +611,9 @@
   function createMinimalUI(speed) {
     return `
       <div class="vsc-badge-wrapper">
-        <button class="vsc-mini-btn vsc-mini-decrease" data-action="decrease">−</button>
-        <div class="vsc-badge">${speed.toFixed(2)}x</div>
-        <button class="vsc-mini-btn vsc-mini-increase" data-action="increase">+</button>
+        <button type="button" class="vsc-mini-btn vsc-mini-decrease" data-action="decrease" aria-label="Decrease playback speed">−</button>
+        <div class="vsc-badge" aria-live="polite">${speed.toFixed(2)}x</div>
+        <button type="button" class="vsc-mini-btn vsc-mini-increase" data-action="increase" aria-label="Increase playback speed">+</button>
       </div>
     `;
   }
@@ -577,9 +643,9 @@
           <span class="vsc-speed-display">${speed.toFixed(2)}x</span>
         </div>
         <div class="vsc-controls">
-          <button class="vsc-btn vsc-btn-decrease" data-action="decrease">−</button>
-          <button class="vsc-btn vsc-btn-reset" data-action="reset">1x</button>
-          <button class="vsc-btn vsc-btn-increase" data-action="increase">+</button>
+          <button type="button" class="vsc-btn vsc-btn-decrease" data-action="decrease" aria-label="Decrease playback speed">−</button>
+          <button type="button" class="vsc-btn vsc-btn-reset" data-action="reset" aria-label="Reset playback speed">1x</button>
+          <button type="button" class="vsc-btn vsc-btn-increase" data-action="increase" aria-label="Increase playback speed">+</button>
         </div>
         <div class="vsc-presets">
           <button class="vsc-preset" data-speed="0.5">0.5x</button>
@@ -622,7 +688,7 @@
             <span class="vsc-volume-value ${volumeBoostLevel > 100 ? 'boosted' : ''}">${volumeBoostLevel}%</span>
           </div>
           <div class="vsc-volume-slider-container">
-            <input type="range" class="vsc-slider vsc-volume-slider" data-action="volume-boost" min="100" max="400" step="10" value="${volumeBoostLevel}">
+            <input type="range" class="vsc-slider vsc-volume-slider" data-action="volume-boost" aria-label="Volume boost" min="100" max="400" step="10" value="${volumeBoostLevel}">
           </div>
         </div>
 
@@ -634,17 +700,17 @@
           </div>
           <div class="vsc-filter-row">
             <span class="vsc-filter-label">☀</span>
-            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="brightness" min="0" max="200" value="${videoFilters.brightness}">
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="brightness" aria-label="Video brightness" min="0" max="200" value="${videoFilters.brightness}">
             <span class="vsc-filter-value vsc-brightness-value">${videoFilters.brightness}%</span>
           </div>
           <div class="vsc-filter-row">
             <span class="vsc-filter-label">◐</span>
-            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="contrast" min="0" max="200" value="${videoFilters.contrast}">
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="contrast" aria-label="Video contrast" min="0" max="200" value="${videoFilters.contrast}">
             <span class="vsc-filter-value vsc-contrast-value">${videoFilters.contrast}%</span>
           </div>
           <div class="vsc-filter-row">
             <span class="vsc-filter-label">🎨</span>
-            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="saturation" min="0" max="200" value="${videoFilters.saturation}">
+            <input type="range" class="vsc-slider vsc-filter-slider" data-filter="saturation" aria-label="Video saturation" min="0" max="200" value="${videoFilters.saturation}">
             <span class="vsc-filter-value vsc-saturation-value">${videoFilters.saturation}%</span>
           </div>
         </div>
@@ -671,7 +737,7 @@
     // Check if we already have a wrapper for this video
     if (media.parentElement.classList.contains('vsc-wrapper')) {
       media.parentElement.appendChild(controller);
-      console.log('Video Speed Pro: Controller attached to existing wrapper');
+      debug('Video Speed Pro: Controller attached to existing wrapper');
       return;
     }
 
@@ -687,7 +753,7 @@
           ytContainer.style.position = 'relative';
         }
         ytContainer.appendChild(controller);
-        console.log('Video Speed Pro: Controller attached to YouTube player');
+        debug('Video Speed Pro: Controller attached to YouTube player');
         return;
       }
     }
@@ -733,7 +799,7 @@
       // If container is close to video size, just append the controller
       if (widthDiff < 100 && heightDiff < 100) {
         bestContainer.appendChild(controller);
-        console.log('Video Speed Pro: Controller attached to positioned container');
+        debug('Video Speed Pro: Controller attached to positioned container');
         return;
       }
       
@@ -745,7 +811,7 @@
       controller.style.top = (videoTop + 10) + 'px';
       controller.style.right = (videoRight + 10) + 'px';
       bestContainer.appendChild(controller);
-      console.log('Video Speed Pro: Controller attached with offset positioning');
+      debug('Video Speed Pro: Controller attached with offset positioning');
       return;
     }
     
@@ -773,7 +839,7 @@
       media.parentElement.insertBefore(wrapper, media);
       wrapper.appendChild(media);
       wrapper.appendChild(controller);
-      console.log('Video Speed Pro: Controller wrapped and attached');
+      debug('Video Speed Pro: Controller wrapped and attached');
     } else {
       console.warn('Video Speed Pro: Media parent disappeared during positioning');
     }
@@ -847,6 +913,9 @@
 
   // Attach event listeners to controller buttons
   function attachControllerEvents(controller, media) {
+    if (controller._vscEventsBound) return;
+    controller._vscEventsBound = true;
+
     controller.addEventListener('click', (e) => {
       // Always stop propagation to prevent video play/pause
       e.stopPropagation();
@@ -940,7 +1009,9 @@
 
   // Set playback speed
   function setSpeed(media, speed) {
-    speed = Math.round(speed * 100) / 100; // Round to 2 decimals
+    speed = Number(speed);
+    if (!Number.isFinite(speed)) return;
+    speed = Math.round(Math.max(0.1, Math.min(16, speed)) * 100) / 100;
     
     // Set speed and force it to stick (some sites like YouTube may try to reset it)
     media.playbackRate = speed;
@@ -1028,32 +1099,48 @@
 
   // Set up intro/outro skip for a media element
   function setupIntroOutroSkip(media) {
+    cleanupIntroOutroListeners(media);
     if (!introOutroSettings || !introOutroSettings.enabled) return;
+
+    const listeners = {};
 
     // Auto-skip intro when video starts playing
     if (introOutroSettings.autoSkipIntro && introOutroSettings.introSkip > 0) {
-      media.addEventListener('play', () => {
+      listeners.play = () => {
         // Only skip if we haven't already skipped for this video session
         // and we're at the beginning of the video
         if (!introSkippedVideos.has(media) && media.currentTime < 2) {
           skipIntro(media);
         }
-      });
+      };
+      media.addEventListener('play', listeners.play);
 
       // Also handle loadedmetadata for autoplay videos
-      media.addEventListener('loadedmetadata', () => {
+      listeners.loadedmetadata = () => {
         if (introOutroSettings.autoSkipIntro && !introSkippedVideos.has(media) && !media.paused && media.currentTime < 2) {
           skipIntro(media);
         }
-      });
+      };
+      media.addEventListener('loadedmetadata', listeners.loadedmetadata);
     }
 
     // Set up outro detection using timeupdate
     if (introOutroSettings.outroSkip > 0) {
-      media.addEventListener('timeupdate', () => {
+      listeners.timeupdate = () => {
         checkOutroSkip(media);
-      });
+      };
+      media.addEventListener('timeupdate', listeners.timeupdate);
     }
+    media._vscIntroOutroListeners = listeners;
+  }
+
+  function cleanupIntroOutroListeners(media) {
+    const listeners = media._vscIntroOutroListeners;
+    if (!listeners) return;
+    if (listeners.play) media.removeEventListener('play', listeners.play);
+    if (listeners.loadedmetadata) media.removeEventListener('loadedmetadata', listeners.loadedmetadata);
+    if (listeners.timeupdate) media.removeEventListener('timeupdate', listeners.timeupdate);
+    delete media._vscIntroOutroListeners;
   }
 
   // Skip intro on a media element
@@ -1072,7 +1159,7 @@
     // Skip to the specified time
     media.currentTime = skipTo;
     showSkipFeedback(media, 'Intro Skipped', skipTo);
-    console.log(`Video Speed Pro: Skipped intro to ${skipTo}s`);
+    debug(`Video Speed Pro: Skipped intro to ${skipTo}s`);
   }
 
   // Skip to outro (end of video minus outro time)
@@ -1089,7 +1176,7 @@
     // Skip to near the end
     media.currentTime = skipTo;
     showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
-    console.log(`Video Speed Pro: Skipped outro to ${skipTo.toFixed(1)}s`);
+    debug(`Video Speed Pro: Skipped outro to ${skipTo.toFixed(1)}s`);
   }
 
   // Check if we should trigger outro skip (for auto-skip)
@@ -1108,7 +1195,7 @@
       // Option 1: Skip to end (lets browser handle what happens next)
       media.currentTime = media.duration - 0.5;
       showSkipFeedback(media, 'Outro Skipped', -introOutroSettings.outroSkip);
-      console.log(`Video Speed Pro: Auto-skipped outro at ${introOutroSettings.outroSkip}s remaining`);
+      debug(`Video Speed Pro: Auto-skipped outro at ${introOutroSettings.outroSkip}s remaining`);
     }
   }
 
@@ -1189,8 +1276,8 @@
       type: 'getIntroOutroSettings',
       hostname: window.location.hostname
     });
-    
-    console.log('Video Speed Pro: Intro/Outro settings reloaded', introOutroSettings);
+    mediaElements.forEach((_controller, media) => setupIntroOutroSkip(media));
+    debug('Video Speed Pro: Intro/Outro settings reloaded', introOutroSettings);
   }
 
   // ==========================================
@@ -1242,7 +1329,7 @@
         URL.revokeObjectURL(url);
 
         showFeedback(media, 'Screenshot', 'Saved!');
-        console.log('Video Speed Pro: Screenshot captured', filename);
+        debug('Video Speed Pro: Screenshot captured', filename);
       }, 'image/png', 1.0);
     } catch (e) {
       console.error('Video Speed Pro: Screenshot failed', e);
@@ -1264,7 +1351,7 @@
 
     showFeedback(media, 'Loop A', formatTime(state.pointA));
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Pro: Set loop point A at', state.pointA);
+    debug('Video Speed Pro: Set loop point A at', state.pointA);
 
     // If both points are set, activate the loop
     if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
@@ -1283,7 +1370,7 @@
 
     showFeedback(media, 'Loop B', formatTime(state.pointB));
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Pro: Set loop point B at', state.pointB);
+    debug('Video Speed Pro: Set loop point B at', state.pointB);
 
     // If both points are set and A < B, activate the loop
     if (state.pointA !== null && state.pointB !== null && state.pointA < state.pointB) {
@@ -1331,7 +1418,7 @@
     abLoopState.delete(media);
     showFeedback(media, 'A-B Loop', 'Cleared');
     updateControllerLoopDisplay(media);
-    console.log('Video Speed Pro: A-B loop cleared');
+    debug('Video Speed Pro: A-B loop cleared');
   }
 
   // Toggle A-B loop on/off (without clearing points)
@@ -1842,7 +1929,7 @@
       setTimeout(() => {
         media.playbackRate = urlRuleResponse.speed;
         updateControllerDisplay(media);
-        console.log(`Video Speed Pro: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
+        debug(`Video Speed Pro: Applied URL rule "${urlRuleResponse.pattern}" -> ${urlRuleResponse.speed}x`);
       }, 100);
       return;
     }
@@ -1893,7 +1980,11 @@
 
   // Set up keyboard listener for shortcuts
   function setupKeyboardListener() {
+    if (interactionListenersBound) return;
+    interactionListenersBound = true;
+
     document.addEventListener('keydown', (e) => {
+      if (isBlocked || !extensionActive) return;
       // Ignore if typing in input fields
       if (e.target.matches('input, textarea, [contenteditable="true"]')) {
         return;
@@ -1924,8 +2015,8 @@
         if (s.key.toUpperCase() !== e.key.toUpperCase()) return false;
 
         // Check modifiers
-        const modifiers = s.modifiers || [];
-        const ctrlMatch = modifiers.includes('ctrl') === (e.ctrlKey || e.metaKey);
+        const modifiers = (s.modifiers || []).map(modifier => modifier.toLowerCase());
+        const ctrlMatch = (modifiers.includes('ctrl') || modifiers.includes('control') || modifiers.includes('meta')) === (e.ctrlKey || e.metaKey);
         const altMatch = modifiers.includes('alt') === e.altKey;
         const shiftMatch = modifiers.includes('shift') === e.shiftKey;
 
@@ -1997,6 +2088,7 @@
 
     // Key up for long-press release
     document.addEventListener('keyup', (e) => {
+      if (isBlocked || !extensionActive) return;
       if (e.target.matches('input, textarea, [contenteditable="true"]')) {
         return;
       }
@@ -2038,6 +2130,7 @@
   // Context menu for quick speed access
   function setupContextMenu() {
     document.addEventListener('contextmenu', (e) => {
+      if (isBlocked || !extensionActive) return;
       // Only show on video elements or controller
       const video = e.target.closest('video');
       const controller = e.target.closest('.vsc-controller');
@@ -2056,6 +2149,7 @@
       // Create context menu
       const menu = document.createElement('div');
       menu.className = 'vsc-context-menu';
+      menu.setAttribute('role', 'menu');
       
       // Apply custom colors to context menu
       const bgColor = settings.colorBackground || '#1a1a2e';
@@ -2065,13 +2159,13 @@
       
       menu.innerHTML = `
         <div class="vsc-menu-title">Speed Controller</div>
-        <div class="vsc-menu-item" data-speed="0.5">0.5x</div>
-        <div class="vsc-menu-item" data-speed="0.75">0.75x</div>
-        <div class="vsc-menu-item" data-speed="1">1x (Normal)</div>
-        <div class="vsc-menu-item" data-speed="1.25">1.25x</div>
-        <div class="vsc-menu-item" data-speed="1.5">1.5x</div>
-        <div class="vsc-menu-item" data-speed="2">2x</div>
-        <div class="vsc-menu-item" data-speed="3">3x</div>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="0.5">0.5x</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="0.75">0.75x</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="1">1x (Normal)</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="1.25">1.25x</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="1.5">1.5x</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="2">2x</button>
+        <button type="button" role="menuitem" class="vsc-menu-item" data-speed="3">3x</button>
       `;
 
       // Position menu
@@ -2101,20 +2195,32 @@
 
   // Picture-in-Picture support
   function setupPipSupport(media) {
+    cleanupPipListeners(media);
     // Listen for PiP events
-    media.addEventListener('enterpictureinpicture', (e) => {
+    const enter = () => {
       pipMediaElement = media;
       if (settings.showPipIndicator !== false) {
         createPipIndicator(media);
       }
-      console.log('Video Speed Pro: Entered Picture-in-Picture mode');
-    });
+      debug('Video Speed Pro: Entered Picture-in-Picture mode');
+    };
 
-    media.addEventListener('leavepictureinpicture', () => {
+    const leave = () => {
       pipMediaElement = null;
       removePipIndicator();
-      console.log('Video Speed Pro: Left Picture-in-Picture mode');
-    });
+      debug('Video Speed Pro: Left Picture-in-Picture mode');
+    };
+    media.addEventListener('enterpictureinpicture', enter);
+    media.addEventListener('leavepictureinpicture', leave);
+    media._vscPipListeners = { enter, leave };
+  }
+
+  function cleanupPipListeners(media) {
+    const listeners = media._vscPipListeners;
+    if (!listeners) return;
+    media.removeEventListener('enterpictureinpicture', listeners.enter);
+    media.removeEventListener('leavepictureinpicture', listeners.leave);
+    delete media._vscPipListeners;
   }
 
   // Create floating PiP speed indicator
@@ -2132,12 +2238,12 @@
     pipIndicator.innerHTML = `
       <div class="vsc-pip-header">
         <span class="vsc-pip-label">PiP Speed</span>
-        <span class="vsc-pip-speed">${media.playbackRate.toFixed(2)}x</span>
+        <span class="vsc-pip-speed" aria-live="polite">${media.playbackRate.toFixed(2)}x</span>
       </div>
       <div class="vsc-pip-controls">
-        <button class="vsc-pip-btn" data-action="decrease">−</button>
-        <button class="vsc-pip-btn vsc-pip-reset" data-action="reset">1x</button>
-        <button class="vsc-pip-btn" data-action="increase">+</button>
+        <button type="button" class="vsc-pip-btn" data-action="decrease" aria-label="Decrease picture-in-picture speed">−</button>
+        <button type="button" class="vsc-pip-btn vsc-pip-reset" data-action="reset" aria-label="Reset picture-in-picture speed">1x</button>
+        <button type="button" class="vsc-pip-btn" data-action="increase" aria-label="Increase picture-in-picture speed">+</button>
       </div>
     `;
 
@@ -2188,53 +2294,44 @@
     }
   }
 
-  // Time saved tracking using requestAnimationFrame for better efficiency
-  // Only runs when tab is visible, reducing CPU usage in background
+  // Track once per second only while media is playing.
   function startTimeTracking() {
-    let lastFrameTime = performance.now();
-    const TRACK_INTERVAL = 1000; // Track every ~1 second
-    let accumulator = 0;
+    if (timeTrackingInterval || contextInvalidated || mediaElements.size === 0) return;
+    lastTrackTime = Date.now();
+    timeTrackingInterval = setInterval(trackTimeSaved, 1000);
+  }
 
-    function trackFrame(currentTime) {
-      // Stop if context is invalidated
-      if (contextInvalidated) {
-        return;
-      }
+  function stopTimeTracking() {
+    if (!timeTrackingInterval) return;
+    clearInterval(timeTrackingInterval);
+    timeTrackingInterval = null;
+  }
 
-      const deltaTime = currentTime - lastFrameTime;
-      lastFrameTime = currentTime;
-
-      // Skip tracking when tab is hidden (saves CPU)
-      if (document.hidden) {
-        timeTrackingInterval = requestAnimationFrame(trackFrame);
-        return;
-      }
-
-      accumulator += deltaTime;
-
-      // Only update every ~1 second to avoid excessive processing
-      if (accumulator >= TRACK_INTERVAL) {
-        const elapsed = accumulator / 1000; // Convert to seconds
-        accumulator = 0;
-
-        // Find playing media at >1x speed
-        let totalTimeSaved = 0;
-        for (const [media] of mediaElements) {
-          if (!media.paused && media.playbackRate > 1) {
-            // Time saved = actual time * (speed - 1)
-            // e.g., 10 seconds at 2x saves 10 * (2-1) = 10 seconds
-            totalTimeSaved += elapsed * (media.playbackRate - 1);
-          }
-        }
-        if (totalTimeSaved > 0) {
-          updateTimeSaved(totalTimeSaved);
-        }
-      }
-
-      timeTrackingInterval = requestAnimationFrame(trackFrame);
+  function trackTimeSaved() {
+    if (contextInvalidated || !extensionActive) {
+      stopTimeTracking();
+      return;
     }
 
-    timeTrackingInterval = requestAnimationFrame(trackFrame);
+    const now = Date.now();
+    const elapsed = Math.min(2, Math.max(0, (now - lastTrackTime) / 1000));
+    lastTrackTime = now;
+    if (document.hidden) return;
+
+    let totalTimeSaved = 0;
+    let hasPlayingMedia = false;
+    for (const [media] of mediaElements) {
+      if (!media.paused && !media.ended) {
+        hasPlayingMedia = true;
+        if (media.playbackRate > 1) totalTimeSaved += elapsed * (media.playbackRate - 1);
+      }
+    }
+
+    if (!hasPlayingMedia) {
+      stopTimeTracking();
+      return;
+    }
+    if (totalTimeSaved > 0) updateTimeSaved(totalTimeSaved);
   }
 
   function updateTimeSaved(seconds) {
@@ -2256,7 +2353,17 @@
     if (currentUrl === lastUrl) return;
 
     lastUrl = currentUrl;
-    console.log('Video Speed Pro: URL changed, checking rules');
+    debug('Video Speed Pro: URL changed, checking rules');
+
+    const access = await sendMessage({ type: 'checkSiteAccess', url: currentUrl });
+    if (settings.enabled === false || access?.blocked) {
+      deactivateExtension();
+      return;
+    }
+    if (!extensionActive) {
+      await activateExtension();
+      return;
+    }
 
     // Reload intro/outro settings for new URL
     introOutroSettings = await sendMessage({
@@ -2275,11 +2382,14 @@
   // Uses Navigation API when available (Chrome 102+) for instant detection,
   // falls back to polling for older browsers
   function startUrlChangeDetection() {
+    if (urlTrackingStarted) return;
+    urlTrackingStarted = true;
+
     // Try to use the modern Navigation API (Chrome 102+, no Firefox/Safari yet)
     if ('navigation' in window) {
       try {
         window.navigation.addEventListener('navigatesuccess', handleUrlChange);
-        console.log('Video Speed Pro: Using Navigation API for URL detection');
+        debug('Video Speed Pro: Using Navigation API for URL detection');
       } catch (e) {
         // Navigation API not fully supported, fall back to polling
         startPollingUrlDetection();
@@ -2295,9 +2405,10 @@
 
   // Fallback: Poll for URL changes (for browsers without Navigation API)
   function startPollingUrlDetection() {
-    console.log('Video Speed Pro: Using polling for URL detection');
-    
-    const urlCheckInterval = setInterval(() => {
+    debug('Video Speed Pro: Using polling for URL detection');
+
+    if (urlCheckInterval) return;
+    urlCheckInterval = setInterval(() => {
       // Skip if context is invalidated
       if (contextInvalidated) {
         clearInterval(urlCheckInterval);
@@ -2305,7 +2416,7 @@
       }
 
       handleUrlChange();
-    }, 500);
+    }, 1000);
   }
 
   // Initialize when DOM is ready

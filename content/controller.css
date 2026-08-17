@@ -1,5 +1,12 @@
 /* Video Speed Controller Pro - Overlay Styles */
 
+.vsc-controller :where(button, input):focus-visible,
+.vsc-pip-indicator button:focus-visible,
+.vsc-context-menu :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .vsc-controller {
   position: absolute;
   top: 10px;
@@ -357,8 +364,14 @@
 }
 
 .vsc-menu-item {
+  display: block;
+  width: 100%;
   padding: 10px 16px;
+  background: transparent;
+  border: 0;
   font-size: 13px;
+  font-family: inherit;
+  text-align: left;
   color: #fff;
   cursor: pointer;
   transition: all 0.15s ease;

@@ -10,12 +10,12 @@
   <!-- Header -->
   <header class="header">
     <div class="header-title">
-      <img src="../icons/icon48.png" alt="Logo">
+      <img src="../icons/icon48.png" alt="">
       <h1>Speed Controller</h1>
     </div>
     <div class="header-toggle">
       <label class="toggle-switch">
-        <input type="checkbox" id="enabled" checked>
+        <input type="checkbox" id="enabled" aria-label="Enable Video Speed Controller" checked>
         <span class="toggle-slider"></span>
       </label>
     </div>
@@ -29,15 +29,23 @@
       </svg>
       Quick Speed
     </h2>
-    <div class="speed-presets-bar">
-      <button class="speed-preset-btn" data-speed="0.5">0.5x</button>
-      <button class="speed-preset-btn" data-speed="0.75">0.75x</button>
-      <button class="speed-preset-btn" data-speed="1">1x</button>
-      <button class="speed-preset-btn" data-speed="1.25">1.25x</button>
-      <button class="speed-preset-btn" data-speed="1.5">1.5x</button>
-      <button class="speed-preset-btn" data-speed="2">2x</button>
-      <button class="speed-preset-btn" data-speed="3">3x</button>
+    <div class="current-site-summary">
+      <div>
+        <span class="current-site-label">Current site</span>
+        <span class="current-site-name" id="current-site">Checking…</span>
+      </div>
+      <span class="current-speed" id="current-speed" aria-live="polite">—</span>
     </div>
+    <div class="speed-presets-bar" aria-label="Set playback speed">
+      <button class="speed-preset-btn" data-speed="0.5" aria-label="Set speed to 0.5 times">0.5x</button>
+      <button class="speed-preset-btn" data-speed="0.75" aria-label="Set speed to 0.75 times">0.75x</button>
+      <button class="speed-preset-btn" data-speed="1" aria-label="Set speed to normal">1x</button>
+      <button class="speed-preset-btn" data-speed="1.25" aria-label="Set speed to 1.25 times">1.25x</button>
+      <button class="speed-preset-btn" data-speed="1.5" aria-label="Set speed to 1.5 times">1.5x</button>
+      <button class="speed-preset-btn" data-speed="2" aria-label="Set speed to 2 times">2x</button>
+      <button class="speed-preset-btn" data-speed="3" aria-label="Set speed to 3 times">3x</button>
+    </div>
+    <p class="site-message" id="site-message" aria-live="polite"></p>
     <div class="time-saved-display">
       <span class="time-saved-label">Time Saved</span>
       <span class="time-saved-value" id="time-saved">0m 0s</span>
@@ -285,10 +293,10 @@
       <h3 class="subsection-title">Per-Site Rules</h3>
       <p class="section-desc">Override intro/outro times for specific sites</p>
       <div class="intro-outro-rule-input-row">
-        <input type="text" class="intro-outro-site-input" id="intro-outro-site" placeholder="Site (e.g., youtube.com)">
-        <input type="number" class="intro-outro-time-input" id="intro-outro-intro" placeholder="Intro" min="0" max="300" step="1">
-        <input type="number" class="intro-outro-time-input" id="intro-outro-outro" placeholder="Outro" min="0" max="300" step="1">
-        <button class="intro-outro-rule-add" id="intro-outro-rule-add">Add</button>
+        <input type="text" class="intro-outro-site-input" id="intro-outro-site" aria-label="Site for intro and outro rule" placeholder="Site (e.g., youtube.com)">
+        <input type="number" class="intro-outro-time-input" id="intro-outro-intro" aria-label="Intro seconds" placeholder="Intro" min="0" max="300" step="1">
+        <input type="number" class="intro-outro-time-input" id="intro-outro-outro" aria-label="Outro seconds" placeholder="Outro" min="0" max="300" step="1">
+        <button class="intro-outro-rule-add" id="intro-outro-rule-add" aria-label="Add intro and outro rule">Add</button>
       </div>
       <div class="intro-outro-rules-list" id="intro-outro-rules-list">
         <!-- Per-site rules rendered by JS -->
@@ -308,9 +316,9 @@
     <p class="section-desc">Set default speeds for specific URL patterns (e.g., "/shorts" = 1x)</p>
     <div class="url-rules-container">
       <div class="url-rule-input-row">
-        <input type="text" class="url-rule-pattern" id="url-rule-pattern" placeholder="URL pattern (e.g., /shorts)">
-        <input type="number" class="url-rule-speed" id="url-rule-speed" placeholder="Speed" min="0.1" max="16" step="0.1" value="1">
-        <button class="url-rule-add" id="url-rule-add">Add</button>
+        <input type="text" class="url-rule-pattern" id="url-rule-pattern" aria-label="URL pattern" placeholder="URL pattern (e.g., /shorts)">
+        <input type="number" class="url-rule-speed" id="url-rule-speed" aria-label="URL rule speed" placeholder="Speed" min="0.1" max="16" step="0.1" value="1">
+        <button class="url-rule-add" id="url-rule-add" aria-label="Add URL speed rule">Add</button>
       </div>
       <div class="url-rules-list" id="url-rules-list">
         <!-- URL rules rendered by JS -->
@@ -345,8 +353,8 @@
     <div class="access-list" id="blacklist-container">
       <div class="access-list-title">Blocklist</div>
       <div class="blacklist-input-row">
-        <input type="text" class="blacklist-input" id="blacklist-input" placeholder="Enter domain or regex pattern">
-        <button class="blacklist-add" id="blacklist-add">Add</button>
+        <input type="text" class="blacklist-input" id="blacklist-input" aria-label="Domain or pattern to block" placeholder="Enter domain, wildcard, or /regex/">
+        <button class="blacklist-add" id="blacklist-add" aria-label="Add blocked site">Add</button>
       </div>
       <div class="blacklist-list" id="blacklist-list">
         <!-- Blocklist items rendered by JS -->
@@ -355,8 +363,8 @@
     <div class="access-list" id="whitelist-container">
       <div class="access-list-title">Allowlist</div>
       <div class="blacklist-input-row">
-        <input type="text" class="blacklist-input" id="whitelist-input" placeholder="Enter domain or regex pattern">
-        <button class="blacklist-add" id="whitelist-add">Add</button>
+        <input type="text" class="blacklist-input" id="whitelist-input" aria-label="Domain or pattern to allow" placeholder="Enter domain, wildcard, or /regex/">
+        <button class="blacklist-add" id="whitelist-add" aria-label="Add allowed site">Add</button>
       </div>
       <div class="blacklist-list" id="whitelist-list">
         <!-- Allowlist items rendered by JS -->
@@ -413,7 +421,7 @@
         <circle cx="12" cy="12" r="3"/>
       </svg>
       <div class="sync-info">
-        <span class="sync-label">Cloud Sync</span>
+        <span class="sync-label">Browser Sync</span>
         <span class="sync-time" id="sync-time">Checking...</span>
       </div>
     </div>
@@ -434,17 +442,17 @@
 
   <!-- Bug Report Modal -->
   <div class="modal-overlay hidden" id="feedback-modal">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-modal-title">
       <div class="modal-header">
-        <h2 class="modal-title">Report an Issue</h2>
-        <button class="modal-close" id="modal-close">&times;</button>
+        <h2 class="modal-title" id="feedback-modal-title">Report an Issue</h2>
+        <button class="modal-close" id="modal-close" aria-label="Close issue report">&times;</button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">Help us improve! Describe the issue you encountered.</p>
         
         <div class="feedback-form">
           <div class="form-group">
-            <label class="form-label">What went wrong?</label>
+            <label class="form-label" for="feedback-description">What went wrong?</label>
             <textarea class="form-textarea" id="feedback-description" placeholder="Describe the issue in detail. What were you trying to do? What happened instead?" rows="4"></textarea>
           </div>
           
@@ -497,9 +505,10 @@
   <input type="file" class="hidden-input" id="import-input" accept=".json">
 
   <!-- Notification -->
-  <div class="notification" id="notification"></div>
+  <div class="notification" id="notification" role="status" aria-live="polite"></div>
 
   <script src="../browser-polyfill.min.js"></script>
+  <script src="../shared/settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

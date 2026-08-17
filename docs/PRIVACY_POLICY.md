@@ -104,7 +104,7 @@ We may update this privacy policy from time to time. Any changes will be reflect
 
 If you have questions about this privacy policy or our data practices, please contact us:
 
-- **GitHub Issues:** [REPLACE: Your GitHub Repository Issues URL, e.g., https://github.com/yourusername/video-speed-controller-pro/issues]
+- **GitHub Issues:** https://github.com/ARJUNVARMA2000/Video-Speed-Controller-extension/issues
 - **Email:** [REPLACE: Your Support Email, e.g., support@yourdomain.com or your-email@gmail.com]
 
 ## Compliance

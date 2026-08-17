@@ -24,6 +24,7 @@ Online learning has exploded, but video platforms cap speed options at 0.5×–2
 3. **Persistent storage** — Chrome's storage API remembers speed preferences per-site and globally
 4. **Non-intrusive UI** — overlay controls appear on hover, don't disrupt viewing
 5. **Keyboard shortcuts** — configurable hotkeys for quick speed adjustments during playback
+6. **Defensive settings layer** — validates imported values and safely merges concurrent per-site updates
 
 ## Solution / Architecture
 
@@ -42,7 +43,7 @@ flowchart LR
 
 - **Background service worker** — manages extension state and cross-tab communication
 - **Content scripts** — injected into pages to control video elements and render the UI overlay
-- **Options page** — configure default speed, keyboard shortcuts, per-site preferences
+- **Popup** — control the current video's speed and configure shortcuts, appearance, access, and per-site preferences
 - **Speed memory** — automatically applies preferred speed to new videos without manual intervention
 
 Implementation uses the standard `HTMLMediaElement.playbackRate` API with fallbacks for sites that try to override user settings.
@@ -54,6 +55,17 @@ Implementation uses the standard `HTMLMediaElement.playbackRate` API with fallba
 - Remembers preferences across sessions and sites
 - Lightweight — negligible performance overhead
 - Published on the Chrome Web Store, used daily as a personal tool
+
+## v1.4 Reliability Update
+
+- Adds current-site and active-speed feedback to the popup
+- Prevents stale popup snapshots from overwriting per-site speed data
+- Validates imported settings and clamps unsafe numeric values
+- Serializes frequent per-site storage writes so updates are not dropped
+- Tracks time saved once per second only while media is playing
+- Cleans up observers, timers, loop handlers, and media state when elements disappear
+- Adds automated settings and service-worker regression tests
+- Adds a deterministic local HTML5 media test lab and reproducible release packaging
 
 ## Tech Stack
 
@@ -69,6 +81,42 @@ git clone https://github.com/ARJUNVARMA2000/Video-Speed-Controller-extension.git
 2. Toggle **Developer mode**
 3. Click **Load unpacked** and select the cloned directory
 4. Navigate to any video site and try the speed controls
+
+If the extension was loaded while a video page was already open, reload that page once so Chrome can inject the content script.
+
+## Development and Testing
+
+Node.js 18 or newer is sufficient; the test suite has no third-party dependencies.
+
+```bash
+npm test
+npm run check
+npm run test:manual
+```
+
+The manual test lab is served at `http://127.0.0.1:4173/media.html`. See [`docs/TESTING.md`](docs/TESTING.md) for the Chrome smoke-test checklist.
+
+Create the exact ZIP used for a store upload with:
+
+```bash
+npm run package
+```
+
+The release artifact is written to `dist/video-speed-controller-v<version>.zip`. Development files and tests are excluded.
+
+## Site and URL Patterns
+
+- Plain text, such as `youtube.com`, performs a case-insensitive substring match.
+- `*` is a wildcard, such as `*.example.com/watch/*`.
+- Regular expressions must be explicit, such as `/example\\.com\\/watch\\/\\d+/`.
+
+The first matching URL speed rule wins.
+
+## Known Limitations
+
+- Canvas- or WebGL-rendered players without an HTML `<video>` or `<audio>` element cannot be controlled.
+- Some DRM-protected media and live streams may reject non-standard playback rates.
+- Screenshot capture can be blocked when a remote video does not permit canvas access.
 
 ## License
 
