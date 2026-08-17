@@ -95,6 +95,14 @@ if (manifest.default_locale) {
     for (const [key, entry] of Object.entries(localeCatalog)) {
       assert.ok(typeof entry.message === 'string' && entry.message.length > 0, `locale ${locale} has an empty ${key}`);
     }
+    assert.ok(
+      [...localeCatalog.appName.message].length <= 75,
+      `locale ${locale} appName exceeds Chrome's 75-character limit`
+    );
+    assert.ok(
+      [...localeCatalog.appDesc.message].length <= 132,
+      `locale ${locale} appDesc exceeds Chrome's 132-character limit`
+    );
   }
 
   const unused = Object.keys(catalog).filter(key => !referenced.includes(key) && !key.startsWith('app'));

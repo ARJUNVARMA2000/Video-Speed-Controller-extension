@@ -98,7 +98,7 @@ it manually before treating it as an extension regression.
 
 ```bash
 npm run package
-unzip -t dist/video-speed-controller-v1.7.0.zip
+unzip -t dist/video-speed-controller-v1.7.1.zip
 ```
 
 Load the repository root unpacked for development. Upload only the versioned ZIP from `dist/`.

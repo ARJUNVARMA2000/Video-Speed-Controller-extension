@@ -1,9 +1,9 @@
-# Chrome Web Store copy and screenshot plan — v1.6
+# Chrome Web Store copy and screenshot plan — v1.7
 
 ## Short description
 
-Control any HTML5 video from 0.1×–16× with custom presets, shortcut chords, silence skipping,
-per-site memory, filters, loops, and a lightweight active-player overlay.
+Speed up or slow down videos on YouTube, Netflix & any site. Volume boost 600%, screenshots,
+A-B loop, filters & hotkeys.
 
 ## Description opener
 
@@ -43,6 +43,7 @@ Sync; the time-saved counter stays in local extension storage.
 5. **Tools for serious viewing** — full controller showing A–B loop, frame step, filters,
    screenshot, intro/outro, and volume boost.
 
-Use the five upload-ready 1280×800 JPEGs in `store-assets/`, keep the real UI readable, and avoid
-claims about unsupported closed-shadow, canvas/WebGL-only, or DRM-restricted players. The
-reproducible HTML/CSS capture surface is retained in `store-assets/source/`.
+Use the five upload-ready 1280×800 JPEGs, the 440×280 small promotional tile, and the optional
+1400×560 marquee promotional tile in `store-assets/`. Keep the real UI readable and avoid claims
+about unsupported closed-shadow, canvas/WebGL-only, or DRM-restricted players. The reproducible
+HTML/CSS capture surface is retained in `store-assets/source/`.

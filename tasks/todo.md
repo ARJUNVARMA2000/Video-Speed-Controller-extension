@@ -684,3 +684,32 @@ valid. The dashboard confirmed **Item saved**; the update was not submitted for 
 
 The public policy now names the same three disclosure categories, explains exactly which local data
 falls into each, and explicitly states Chrome Web Store User Data Policy and Limited Use compliance.
+
+---
+
+# v1.7 Chrome Web Store submission readiness
+
+## Plan
+
+- [x] Shorten every localized manifest description to Chrome's 132-character maximum and enforce
+      the name/description limits in the manifest validator.
+- [x] Correct the v1.7 listing document and add a required 440x280 small promotional tile that
+      matches the shipped icon and screenshot branding.
+- [x] Run the full test/package gate and visually verify every release asset.
+- [x] Commit and push the corrected release package source to `main`.
+- [x] Use the signed-in Chrome Web Store dashboard to upload/save the corrected assets and review
+      Store Listing, Privacy practices, Distribution, and Status without submitting for review.
+
+## Review
+
+The corrected package is version 1.7.1 because Chrome Web Store already has the 1.7.0 draft.
+All six localized manifest descriptions are now within the 132-character maximum, and the
+validator enforces both the 75-character name and 132-character description limits. The full
+34-test unit suite and unpacked-extension E2E pass, and `dist/video-speed-controller-v1.7.1.zip`
+passes `unzip -t`. The generated full-bleed `store-assets/small-promo-tile.png` is a visually
+verified 440x280 RGB PNG with no text or unsupported claims; its matching marquee asset is
+`store-assets/marquee-promo-tile.png`, a verified 1400x560 RGB PNG. The 1.7.1 ZIP and new marquee
+tile are uploaded to the signed-in dashboard, the matching small tile remains in place, and the
+draft reports **Item saved**. Privacy declarations are complete; distribution is free, public, and
+all regions; test credentials are correctly blank because no login or special setup is required;
+and Status reports **This draft is unpublished**. Submission for review was not triggered.

@@ -1,6 +1,6 @@
 {
   "name": "video-speed-controller-extension",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "scripts": {
     "benchmark": "node scripts/benchmark-extension.js",

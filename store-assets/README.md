@@ -8,3 +8,6 @@ reproducible capture surface and uses the extension's shipped visual language an
 3. `03-shortcuts.jpg` — exact modifier chords, speed step, and presets
 4. `04-silence-skipping.jpg` — opt-in local silence analysis
 5. `05-advanced-tools.jpg` — full controller tools
+
+Upload `small-promo-tile.png` as the required global `440×280` small promotional tile.
+Upload `marquee-promo-tile.png` as the optional global `1400×560` marquee promotional tile.
